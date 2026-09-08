@@ -6,7 +6,7 @@ import torch
 
 from app.game.coords import parse_iccs
 from train.device import torch_device
-from train.net import MAX_FILES, MAX_RANKS, N_PIECE, PolicyNet
+from train.net import MAX_FILES, MAX_RANKS, N_PIECE, build_net
 
 CODE_INDEX = {
     "": 0,
@@ -39,10 +39,10 @@ def move_index(mv: str) -> int:
 
 def policy_move(ckpt: Path, req, device=None) -> str:
     device = device or torch_device()
-    net = PolicyNet()
     blob = torch.load(ckpt, map_location=device, weights_only=False)
+    net = build_net(blob if isinstance(blob, dict) else None)
     state = blob["model"] if isinstance(blob, dict) and "model" in blob else blob
-    net.load_state_dict(state)
+    net.load_state_dict({k: v.float() for k, v in state.items()})
     net.to(device).eval()
     game = (req.extra or {}).get("game")
     x = encode_game(game).unsqueeze(0).to(device)

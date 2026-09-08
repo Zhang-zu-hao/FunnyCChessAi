@@ -31,7 +31,7 @@
 - **七种玩法**：揭棋（默认）、中国象棋、暗棋、侦查象棋、满洲Dog棋、霸王棋、五虎棋
 - **人机 / AI 对战 / 在线房间**：每种模式都可让两个本地引擎互斗；也可上传自己的 `.pt`
 - **可插拔 AI**：皮卡鱼 UCI、变体规则搜索、启发式、自训练权重、HTTP 自定义模型
-- **训练入口**：内置搜索当教师自对弈 + 轻量策略网络（见 [`train/README.md`](train/README.md)）
+- **训练入口**：GPU 大批次自对弈 + AMP 残差网络（见 [`train/README.md`](train/README.md)）
 
 ## 玩法
 
@@ -108,15 +108,14 @@ python run.py --port 8877
 
 ## 训练
 
-用**内置搜索当教师**采集，再在 GPU 上拟合轻量网络。约 3.5 小时排队示例：
+用 GPU 大批次策略自对弈 + AMP 残差网络训练（batch 4096，约 3 小时排队）：
 
 ```bash
 bash train/queue.sh
-# 或
-python -m train.loop --mode all --hours 3.5 --teacher-level 2 --epochs 8
+python -m train.loop --mode all --hours 3.0 --batch-size 4096 --play-batch 256
 ```
 
-详见 [`train/README.md`](train/README.md)。这是模仿内置搜索的策略网络，棋力仍低于满强度皮卡鱼 / 深度搜索，但明显高于随机自对弈那一版。
+详见 [`train/README.md`](train/README.md)。这是策略网络模仿自对弈，棋力仍低于满强度皮卡鱼 / 深度搜索。自训练权重约 37MB/个，随仓库发布。
 
 ## 仓库结构
 
@@ -129,7 +128,7 @@ FunnyCChessAi/
 │   ├── game/            # 各玩法规则
 │   └── ai/              # 皮卡鱼 / 揭棋搜索 / 变体搜索 / 自训练 / HTTP
 ├── web/                 # 大厅与棋盘前端
-├── train/               # 搜索教师训练
+├── train/               # GPU 自对弈训练
 ├── engines/zzh/         # 自训练权重（入库）
 ├── engines/local/       # 用户自己的权重（不入库）
 ├── tests/
