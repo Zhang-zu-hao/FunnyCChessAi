@@ -13,9 +13,9 @@ if str(ROOT) not in sys.path:
 
 
 def main() -> None:
-    from app.catalog import DEVELOPER, LICENSE_NAME, PROJECT_NAME
+    from app.catalog import LICENSE_NAME, PROJECT_TITLE
 
-    parser = argparse.ArgumentParser(description=PROJECT_NAME)
+    parser = argparse.ArgumentParser(description=PROJECT_TITLE)
     parser.add_argument("--host", default=os.environ.get("XIANGQI_HOST", "0.0.0.0"))
     parser.add_argument("--port", type=int, default=int(os.environ.get("XIANGQI_PORT", "8877")))
     parser.add_argument("--no-tunnel", action="store_true")
@@ -29,7 +29,7 @@ def main() -> None:
     import uvicorn
 
     print("=" * 56)
-    print(f"  {PROJECT_NAME}  ·  开发者 {DEVELOPER}  ·  {LICENSE_NAME}")
+    print(f"  {PROJECT_TITLE}  ·  {LICENSE_NAME}")
     print("  揭棋 / 中国象棋 / 暗棋 / 侦查 / 满洲Dog / 霸王 / 五虎")
     print(f"  监听 {args.host}:{args.port} （启动后见终端里的访问链接）")
     print("=" * 56)

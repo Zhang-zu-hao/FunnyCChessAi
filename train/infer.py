@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import torch
@@ -25,6 +24,8 @@ def encode_game(game) -> torch.Tensor:
         r, f = p["rank"], p["file"]
         if r < MAX_RANKS and f < MAX_FILES:
             t[idx, r, f] = 1
+    if getattr(game, "side", "w") == "w":
+        t[16].fill_(1)
     return t
 
 
@@ -39,8 +40,9 @@ def move_index(mv: str) -> int:
 def policy_move(ckpt: Path, req, device=None) -> str:
     device = device or torch_device()
     net = PolicyNet()
-    blob = torch.load(ckpt, map_location=device)
-    net.load_state_dict(blob["model"] if isinstance(blob, dict) and "model" in blob else blob)
+    blob = torch.load(ckpt, map_location=device, weights_only=False)
+    state = blob["model"] if isinstance(blob, dict) and "model" in blob else blob
+    net.load_state_dict(state)
     net.to(device).eval()
     game = (req.extra or {}).get("game")
     x = encode_game(game).unsqueeze(0).to(device)

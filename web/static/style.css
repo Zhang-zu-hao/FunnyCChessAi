@@ -29,7 +29,7 @@ body {
   color: var(--paper); margin-bottom: 18px;
 }
 .brand { display: flex; gap: 12px; align-items: center; }
-.brand h1 { margin: 0; font-size: 26px; letter-spacing: 0.18em; }
+.brand h1 { margin: 0; font-size: 20px; letter-spacing: 0.04em; }
 .sub { margin: 2px 0 0; opacity: 0.75; font-size: 13px; letter-spacing: 0.2em; }
 .seal {
   width: 48px; height: 48px; border-radius: 8px;
@@ -100,7 +100,8 @@ body {
 .pick-grid button { background: #fff8ea; }
 .piece.super { box-shadow: 0 0 0 3px #d4a017, 2px 3px 0 rgba(60,30,10,.28); }
 .board.board-anqi { background: #e2c48a; }
-.brand h1 { letter-spacing: 0.08em; font-size: 22px; }
+.seat-engine { max-width: 140px; font-size: 12px; padding: 4px 6px; }
+.brand h1 { letter-spacing: 0.04em; font-size: 20px; }
 .mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .mode-card {
   text-align: left; padding: 16px 14px; border-radius: 12px; cursor: pointer;

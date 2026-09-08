@@ -10,7 +10,7 @@ from typing import Any
 
 from fastapi import WebSocket
 
-from app.ai import choose_move, narrator
+from app.ai import choose_move, list_engines, narrator
 from app.ai.base import MoveRequest
 from app.catalog import ai_profile, clamp_level, mode_info
 from app.game import create_game
@@ -22,11 +22,26 @@ def new_room_id() -> str:
     return "".join(secrets.choice(CODE_ALPHABET) for _ in range(6))
 
 
+def _engine_label(engine_id: str, mode: str) -> str:
+    eid = (engine_id or "auto").lower()
+    for e in list_engines(mode):
+        if e["id"] == eid:
+            return e["name"]
+    if eid in ("auto", ""):
+        return "自动"
+    if eid.startswith("pt:"):
+        return eid.split("/")[-1]
+    return eid
+
+
 @dataclass
 class Seat:
     kind: str = "human"  # human | ai
     client_id: str | None = None
     name: str = ""
+    engine_id: str = "auto"
+    level: int | None = None
+    checkpoint: str | None = None
 
 
 @dataclass
@@ -43,7 +58,7 @@ class Room:
     mode: str
     game: Any
     level: int = 5
-    engine_id: str = "pikafish"
+    engine_id: str = "auto"
     seats: dict[str, Seat] = field(default_factory=lambda: {"w": Seat(), "b": Seat(kind="ai")})
     clients: dict[str, Client] = field(default_factory=dict)
     created: float = field(default_factory=time.time)
@@ -81,6 +96,10 @@ class RoomManager:
         engine_id: str,
         client: Client,
         seed: int | None = None,
+        w_engine: str | None = None,
+        b_engine: str | None = None,
+        w_level: int | None = None,
+        b_level: int | None = None,
     ) -> Room:
         async with self.lock:
             rid = new_room_id()
@@ -88,22 +107,42 @@ class RoomManager:
                 rid = new_room_id()
             game = create_game(mode, seed=seed)
             color = "w" if color in ("w", "red", "红") else "b"
-            vs = vs if vs in ("ai", "human") else "ai"
-            other = "b" if color == "w" else "w"
-            seats = {
-                color: Seat(kind="human", client_id=client.client_id, name=client.name),
-                other: Seat(kind="ai" if vs == "ai" else "human"),
-            }
-            client.role = color
-            if getattr(game, "mode", "") == "zhencha" and vs == "ai":
-                if hasattr(game, "auto_ready_ai"):
+            vs = vs if vs in ("ai", "human", "aivsai") else "ai"
+            default_engine = engine_id or "auto"
+            default_level = clamp_level(level)
+            if vs == "aivsai":
+                we = (w_engine or default_engine or "auto")
+                be = (b_engine or default_engine or "auto")
+                wl = clamp_level(w_level if w_level is not None else default_level)
+                bl = clamp_level(b_level if b_level is not None else default_level)
+                seats = {
+                    "w": Seat(kind="ai", engine_id=we, level=wl, name=_engine_label(we, game.mode)),
+                    "b": Seat(kind="ai", engine_id=be, level=bl, name=_engine_label(be, game.mode)),
+                }
+                client.role = "spectator"
+                if getattr(game, "mode", "") == "zhencha" and hasattr(game, "auto_ready_ai"):
+                    game.auto_ready_ai("w")
+                    game.auto_ready_ai("b")
+            else:
+                other = "b" if color == "w" else "w"
+                seats = {
+                    color: Seat(kind="human", client_id=client.client_id, name=client.name),
+                    other: Seat(
+                        kind="ai" if vs == "ai" else "human",
+                        engine_id=default_engine,
+                        level=default_level,
+                        name=_engine_label(default_engine, game.mode) if vs == "ai" else "",
+                    ),
+                }
+                client.role = color
+                if getattr(game, "mode", "") == "zhencha" and vs == "ai" and hasattr(game, "auto_ready_ai"):
                     game.auto_ready_ai(other)
             room = Room(
                 id=rid,
                 mode=game.mode,
                 game=game,
-                level=clamp_level(level),
-                engine_id=engine_id or "auto",
+                level=default_level,
+                engine_id=default_engine,
                 seats=seats,
             )
             room.clients[client.client_id] = client
@@ -142,7 +181,8 @@ class RoomManager:
             for seat in room.seats.values():
                 if seat.client_id == client_id:
                     seat.client_id = None
-                    seat.name = ""
+                    if seat.kind == "human":
+                        seat.name = ""
 
     def snapshot(self, room: Room) -> dict[str, Any]:
         state = room.game.observer_state()
@@ -155,11 +195,14 @@ class RoomManager:
             "engine_id": room.engine_id,
             "mode_name": info["name"],
             "ai_profile": prof,
+            "engines": list_engines(room.mode),
             "seats": {
                 color: {
                     "kind": seat.kind,
                     "occupied": bool(seat.client_id),
                     "name": seat.name or ("AI" if seat.kind == "ai" else "空位"),
+                    "engine_id": seat.engine_id,
+                    "level": seat.level if seat.level is not None else room.level,
                 }
                 for color, seat in room.seats.items()
             },
@@ -205,6 +248,7 @@ class RoomManager:
             note = (note + "，" if note else "") + f"吃 {names.get(event['captured'], event['captured'])}"
         if event.get("suicide"):
             note = (note + "，" if note else "") + "猜错自损"
+        if event.get("check"):
             note = (note + "，" if note else "") + "将军"
         if room.game.over:
             if room.game.winner == "draw":
@@ -222,25 +266,33 @@ class RoomManager:
             if room.game.over:
                 return
             side = room.game.side
-            if room.seats[side].kind != "ai" or room.ai_busy:
+            seat = room.seats[side]
+            if seat.kind != "ai" or room.ai_busy:
                 return
             room.ai_busy = True
             game = room.game
-            level = room.level
-            engine_id = room.engine_id
+            level = seat.level if seat.level is not None else room.level
+            engine_id = seat.engine_id or room.engine_id
+            checkpoint = seat.checkpoint
             legal = game.legal_moves()
             fen = game.fen()
             behavior = getattr(game, "behavior_fen", lambda: "")()
             mode = game.mode
+        both_ai = room.seats["w"].kind == "ai" and room.seats["b"].kind == "ai"
+        if both_ai:
+            await asyncio.sleep(0.35)
         moved = False
         try:
+            extra: dict[str, Any] = {"game": game, "behavior_fen": behavior}
+            if checkpoint:
+                extra["checkpoint"] = checkpoint
             req = MoveRequest(
                 mode=mode,
                 fen=fen,
                 legal_moves=legal,
                 side=side,
                 level=level,
-                extra={"game": game, "behavior_fen": behavior},
+                extra=extra,
             )
             resp = await asyncio.get_running_loop().run_in_executor(
                 None, lambda: choose_move(req, engine_id)
@@ -253,17 +305,20 @@ class RoomManager:
             n = narrator()
             if n.available():
                 try:
-                    extra = await asyncio.get_running_loop().run_in_executor(
+                    extra_c = await asyncio.get_running_loop().run_in_executor(
                         None,
                         lambda: n.comment(room.game.mode, resp.move, room.game.fen(), room.game.last_event),
                     )
-                    if extra:
-                        comment = extra
+                    if extra_c:
+                        comment = extra_c
                 except Exception:
                     pass
+            label = _engine_label(engine_id, mode)
             await self.broadcast(room, {
                 "type": "ai_comment",
                 "engine": resp.engine,
+                "engine_name": label,
+                "side": side,
                 "fallback": resp.fallback,
                 "comment": comment,
                 "move": resp.move,
@@ -273,7 +328,7 @@ class RoomManager:
             if moved and not room.game.over and room.seats[room.game.side].kind == "ai":
                 asyncio.create_task(self.maybe_ai(room))
 
-    async def set_seat(self, room: Room, color: str, kind: str, client: Client | None) -> None:
+    async def set_seat(self, room: Room, color: str, kind: str, client: Client | None, engine_id: str | None = None, level: int | None = None) -> None:
         if color not in ("w", "b"):
             raise ValueError("颜色无效")
         if kind not in ("human", "ai"):
@@ -281,14 +336,17 @@ class RoomManager:
         async with room.lock:
             seat = room.seats[color]
             seat.kind = kind
+            if engine_id:
+                seat.engine_id = engine_id
+            if level is not None:
+                seat.level = clamp_level(level)
             if kind == "ai":
                 seat.client_id = None
-                seat.name = "AI"
+                seat.name = _engine_label(seat.engine_id, room.mode)
             elif client and not seat.client_id:
                 seat.client_id = client.client_id
                 seat.name = client.name
-                if client:
-                    client.role = color
+                client.role = color
         await self.broadcast(room, {"type": "state", **self.snapshot(room)})
         await self.maybe_ai(room)
 
@@ -297,6 +355,10 @@ class RoomManager:
             room.mode = mode or room.mode
             room.game = create_game(room.mode)
             room.ai_busy = False
+            if room.seats["w"].kind == "ai" and room.seats["b"].kind == "ai":
+                if getattr(room.game, "mode", "") == "zhencha" and hasattr(room.game, "auto_ready_ai"):
+                    room.game.auto_ready_ai("w")
+                    room.game.auto_ready_ai("b")
         await self.broadcast(room, {"type": "state", **self.snapshot(room)})
         await self.maybe_ai(room)
 

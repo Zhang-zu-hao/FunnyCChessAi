@@ -6,13 +6,14 @@ import os
 import secrets
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, File, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from app import __version__
 from app.ai import list_engines, pikafish, shutdown
-from app.catalog import DEVELOPER, PROJECT_NAME, clamp_level, public_meta
+from app.ai.zzh import save_uploaded_pt
+from app.catalog import DEVELOPER, PROJECT_NAME, PROJECT_TITLE, clamp_level, public_meta
 from app.config import PORT, TUNNEL, WEB_DIR
 from app.rooms import Client, clean_name, manager
 from app.tunnel import Tunnel, lan_urls
@@ -69,6 +70,7 @@ async def health():
         "ok": True,
         "version": __version__,
         "name": PROJECT_NAME,
+        "title": PROJECT_TITLE,
         "developer": DEVELOPER,
         "engines": engines,
         "urls": PUBLIC_URLS,
@@ -92,6 +94,23 @@ async def info():
 @app.get("/api/modes")
 async def api_modes():
     return JSONResponse(public_meta())
+
+
+@app.get("/api/ais")
+async def api_ais(mode: str = "jieqi"):
+    return JSONResponse({"mode": mode, "engines": list_engines(mode)})
+
+
+@app.post("/api/local-ai")
+async def api_local_ai(file: UploadFile = File(...)):
+    data = await file.read()
+    if len(data) > 120 * 1024 * 1024:
+        return JSONResponse({"ok": False, "message": "文件过大（上限 120MB）"}, status_code=400)
+    try:
+        dest = save_uploaded_pt(file.filename or "upload.pt", data)
+    except ValueError as exc:
+        return JSONResponse({"ok": False, "message": str(exc)}, status_code=400)
+    return JSONResponse({"ok": True, "id": f"pt:local/{dest.name}", "name": f"本地 {dest.stem}", "path": dest.name})
 
 
 @app.websocket("/ws")
@@ -124,8 +143,12 @@ async def websocket_game(ws: WebSocket):
                         color=msg.get("color") or "w",
                         vs=msg.get("vs") or "ai",
                         level=int(msg.get("level") or 5),
-                        engine_id=msg.get("engine") or "pikafish",
+                        engine_id=msg.get("engine") or "auto",
                         client=client,
+                        w_engine=msg.get("w_engine"),
+                        b_engine=msg.get("b_engine"),
+                        w_level=msg.get("w_level"),
+                        b_level=msg.get("b_level"),
                     )
                     room_id = room.id
                     await ws.send_json({
@@ -163,7 +186,14 @@ async def websocket_game(ws: WebSocket):
                     if not room_id:
                         raise ValueError("尚未进入房间")
                     room = manager.get(room_id)
-                    await manager.set_seat(room, msg.get("color"), msg.get("kind"), client)
+                    await manager.set_seat(
+                        room,
+                        msg.get("color"),
+                        msg.get("kind"),
+                        client,
+                        engine_id=msg.get("engine"),
+                        level=msg.get("level"),
+                    )
                 elif mtype == "new_game":
                     if not room_id:
                         raise ValueError("尚未进入房间")

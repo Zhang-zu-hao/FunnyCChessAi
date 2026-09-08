@@ -7,8 +7,10 @@ engines/pikafish.nnue
 engines/pikafish-jieqi
 engines/jieqi-net.nnue
 engines/cloudflared
-engines/zzh/*.pt
+engines/local/*.pt
+engines/local/*.pth
 *.pt
+!engines/zzh/*.pt
 *.nnue
 *.log
 train/logs/

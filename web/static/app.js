@@ -58,39 +58,83 @@
       grid.appendChild(btn);
     });
     mode = meta.default_mode || "jieqi";
-    if (meta.name) {
-      document.title = meta.name;
+    const title = meta.title || (meta.name ? `${meta.name} — ${meta.developer || "ZZH"}` : "");
+    if (title) {
+      document.title = title;
       const h1 = document.querySelector(".brand h1");
-      if (h1) h1.textContent = meta.name;
+      if (h1) h1.textContent = title;
     }
     if (meta.github) {
       const gl = document.getElementById("githubLink");
       if (gl) gl.href = meta.github;
     }
-    const sel = $("level");
-    sel.innerHTML = "";
-    (meta.levels || []).forEach((lv) => {
-      const o = document.createElement("option");
-      o.value = lv.value;
-      o.textContent = lv.label;
-      if (lv.value === 5) o.selected = true;
-      sel.appendChild(o);
-    });
-    sel.onchange = () => {
+    fillLevelSelect($("level"), meta.levels, 5);
+    fillLevelSelect($("levelRed"), meta.levels, 5);
+    fillLevelSelect($("levelBlack"), meta.levels, 8);
+    $("level").onchange = () => {
       updateEngineHint();
-      if (state) send({ type: "level", level: Number(sel.value) });
+      if (state) send({ type: "level", level: Number($("level").value) });
     };
     updateEngineHint();
+    loadAis(mode);
     if (!roomId) {
       const m = (meta.modes || []).find((x) => x.id === mode);
       if (m) showRules(m, true);
     }
   }
 
+  function fillLevelSelect(sel, levels, prefer) {
+    if (!sel) return;
+    sel.innerHTML = "";
+    (levels || []).forEach((lv) => {
+      const o = document.createElement("option");
+      o.value = lv.value;
+      o.textContent = lv.label;
+      if (lv.value === prefer) o.selected = true;
+      sel.appendChild(o);
+    });
+  }
+
+  function loadAis(md) {
+    fetch("/api/ais?mode=" + encodeURIComponent(md || mode || "jieqi"))
+      .then((r) => r.json())
+      .then((data) => {
+        const ids = (data.engines || []).map((e) => e.id);
+        const pick = (...cands) => cands.find((id) => ids.includes(id)) || "auto";
+        fillEngineSelect($("aiRed"), data.engines, pick("selftrain", "variant-search", "heuristic"));
+        fillEngineSelect($("aiBlack"), data.engines, pick("pikafish", "variant-search", "heuristic"));
+        document.querySelectorAll(".seat-engine").forEach((sel) => {
+          const cur = sel.value;
+          fillEngineSelect(sel, data.engines, cur || "auto");
+        });
+      })
+      .catch(() => {});
+  }
+
+  function fillEngineSelect(sel, engines, prefer) {
+    if (!sel) return;
+    const keep = prefer || sel.value;
+    sel.innerHTML = "";
+    const auto = document.createElement("option");
+    auto.value = "auto";
+    auto.textContent = "自动";
+    sel.appendChild(auto);
+    (engines || []).forEach((e) => {
+      if (!e.available && e.kind !== "selftrain") return;
+      const o = document.createElement("option");
+      o.value = e.id;
+      o.textContent = e.name + (e.available ? "" : "（未接入）");
+      sel.appendChild(o);
+    });
+    const ids = [...sel.options].map((o) => o.value);
+    sel.value = ids.includes(keep) ? keep : (ids.includes("selftrain") ? "selftrain" : "auto");
+  }
+
   function selectMode(m) {
     document.querySelectorAll(".mode-card").forEach((b) => b.classList.toggle("active", b.dataset.mode === m.id));
     mode = m.id;
     updateEngineHint();
+    loadAis(mode);
     showRules(m, false);
   }
 
@@ -104,11 +148,11 @@
       .then((info) => {
         const modes = info.modes || [];
         const hit = modes.find((x) => x.id === mode);
-        engineHint.textContent = `${name} · 难度 ${lv === 99 ? "ZZH" : lv}（引擎与参数在对局侧栏同步显示）`;
+        engineHint.textContent = `${name} · 难度 ${lv === 99 ? "自训练" : lv}（引擎与参数在对局侧栏同步显示）`;
         if (hit) engineHint.textContent = `${name} · 点选难度后，对局中会显示当前引擎名称、算法与搜索参数`;
       })
       .catch(() => {
-        engineHint.textContent = `${name} · 难度 ${lv === 99 ? "ZZH" : lv}`;
+        engineHint.textContent = `${name} · 难度 ${lv === 99 ? "自训练" : lv}`;
       });
   }
 
@@ -159,7 +203,31 @@
   }
 
   $("btnAi").onclick = () => startGame("ai");
+  $("btnAiMatch").onclick = () => startGame("aivsai");
   $("btnRoom").onclick = () => startGame("human");
+  $("btnPickAi").onclick = () => $("aiFile").click();
+  $("aiFile").onchange = () => {
+    const f = $("aiFile").files && $("aiFile").files[0];
+    if (!f) return;
+    $("aiFileName").value = f.name;
+    const body = new FormData();
+    body.append("file", f);
+    fetch("/api/local-ai", { method: "POST", body })
+      .then((r) => r.json())
+      .then((res) => {
+        if (!res.ok) {
+          lobbyHint.textContent = res.message || "上传失败";
+          return;
+        }
+        lobbyHint.textContent = "已加入本地 AI：" + res.name;
+        loadAis(mode);
+        setTimeout(() => {
+          $("aiRed").value = res.id;
+          $("aiBlack").value = res.id;
+        }, 200);
+      })
+      .catch(() => (lobbyHint.textContent = "上传失败"));
+  };
   $("btnJoin").onclick = () => joinGame(($("joinCode").value || "").trim());
   $("btnCopy").onclick = async () => {
     try {
@@ -177,6 +245,14 @@
   document.querySelectorAll(".seat button").forEach((btn) => {
     btn.onclick = () => send({ type: "seat", color: btn.dataset.seat, kind: btn.dataset.kind });
   });
+  document.querySelectorAll(".seat-engine").forEach((sel) => {
+    sel.onchange = () => send({
+      type: "seat",
+      color: sel.dataset.seatEngine,
+      kind: "ai",
+      engine: sel.value,
+    });
+  });
 
   if (roomId) {
     $("joinCode").value = roomId.toUpperCase();
@@ -191,15 +267,23 @@
     const active = document.querySelector(".mode-card.active");
     mode = (active && active.dataset.mode) || "jieqi";
     connect(() => {
-      send({
+      const payload = {
         type: "create",
         mode,
         vs,
         color: $("color").value,
         level: Number($("level").value),
         name: nick(),
-        engine: Number($("level").value) === 99 ? "zzh" : "auto",
-      });
+        engine: Number($("level").value) === 99 ? "selftrain" : "auto",
+      };
+      if (vs === "aivsai") {
+        payload.w_engine = $("aiRed").value;
+        payload.b_engine = $("aiBlack").value;
+        payload.w_level = Number($("levelRed").value);
+        payload.b_level = Number($("levelBlack").value);
+        payload.engine = payload.w_engine;
+      }
+      send(payload);
     });
   }
 
@@ -248,7 +332,9 @@
         return;
       }
       if (msg.type === "ai_comment") {
-        commentEl.textContent = `${msg.engine}${msg.fallback ? "（兜底）" : ""}：${msg.comment || msg.move}`;
+        const who = msg.side === "b" ? "黑" : "红";
+        const name = msg.engine_name || msg.engine;
+        commentEl.textContent = `${who}/${name}${msg.fallback ? "（兜底）" : ""}：${msg.comment || msg.move}`;
       }
     };
   }
@@ -306,6 +392,8 @@
     drawPieces();
     $("seatW").textContent = labelSeat(state.seats.w);
     $("seatB").textContent = labelSeat(state.seats.b);
+    syncSeatEngine("w");
+    syncSeatEngine("b");
     shareUrl.value = absUrl(state.share_url);
     roomMeta.textContent = `房间 ${state.room} · 在线 ${state.viewers} · 你是${roleText(role)}`;
     statusEl.textContent = statusText();
@@ -333,8 +421,23 @@
     }
   }
 
+  function syncSeatEngine(color) {
+    const sel = document.querySelector(`[data-seat-engine="${color}"]`);
+    if (!sel || !state || !state.seats) return;
+    const want = state.seats[color].engine_id || "auto";
+    if (state.engines && sel.dataset.modeKey !== state.mode) {
+      fillEngineSelect(sel, state.engines, want);
+      sel.dataset.modeKey = state.mode;
+    } else if ([...sel.options].some((o) => o.value === want)) {
+      sel.value = want;
+    }
+  }
+
   function labelSeat(seat) {
-    if (seat.kind === "ai") return "AI";
+    if (seat.kind === "ai") {
+      const lv = seat.level === 99 ? "自训练" : (seat.level || "");
+      return (seat.name || "AI") + (lv ? ` · ${lv}` : "");
+    }
     return seat.occupied ? seat.name : "空位/本机可走";
   }
 

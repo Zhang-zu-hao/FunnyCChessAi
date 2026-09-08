@@ -3,7 +3,8 @@ from __future__ import annotations
 from typing import Any
 
 DEVELOPER = "ZZH"
-PROJECT_NAME = "FunnyCChessAi"
+PROJECT_NAME = "FunnyAi对弈Of象棋"
+PROJECT_TITLE = f"{PROJECT_NAME} — {DEVELOPER}"
 PROJECT_TAGLINE = "一个集中国象棋多种衍生玩法于一体、且内置多种 AI 引擎及模型的在线对战平台。"
 GITHUB_URL = "https://github.com/Zhang-zu-hao/FunnyCChessAi"
 LICENSE_NAME = "GPL-3.0"
@@ -23,7 +24,7 @@ LEVEL_LABELS = {
     8: "8 特级",
     9: "9 宗师",
     10: "10 极限",
-    99: "ZZH",
+    99: "自训练",
 }
 
 
@@ -66,7 +67,7 @@ def _xq_profile(level: int) -> dict[str, Any]:
     elif level == 10:
         engine, algo = "皮卡鱼（极限）", "深度搜索 + 长思考"
     else:
-        engine, algo = "ZZH 引擎", "自研权重 / 自定义模型（未接入时回退极限皮卡鱼）"
+        engine, algo = "自训练模型", "搜索教师自对弈权重（未接入时回退极限皮卡鱼）"
     d, t = XIANGQI_DEPTH[level], XIANGQI_MOVETIME_MS[level]
     return {
         "engine": engine,
@@ -91,8 +92,8 @@ def _jq_profile(level: int) -> dict[str, Any]:
         engine, algo = "揭棋极限搜索", "最大深度与时间 · 皮卡鱼开局库提示"
         extra = "最长思考"
     else:
-        engine, algo = "ZZH 揭棋引擎", "自研模型（未接入时回退极限搜索）"
-        extra = "预留 checkpoint / HTTP"
+        engine, algo = "自训练揭棋模型", "搜索教师自对弈权重（未接入时回退极限搜索）"
+        extra = "本地 engines/zzh 权重 / HTTP"
     return {
         "engine": engine,
         "algo": algo,
@@ -104,8 +105,8 @@ def _jq_profile(level: int) -> dict[str, Any]:
 
 def _var_profile(level: int, name: str, algo: str) -> dict[str, Any]:
     if level == 99:
-        engine = f"ZZH · {name}"
-        algo = "自研模型（未接入时回退最强搜索）"
+        engine = f"自训练 · {name}"
+        algo = "搜索教师自对弈权重（未接入时回退最强搜索）"
     elif level <= 3:
         engine = f"{name} · 浅层"
     elif level <= 6:
@@ -283,6 +284,7 @@ def ai_profile(mode: str, level: int) -> dict[str, Any]:
 def public_meta() -> dict[str, Any]:
     return {
         "name": PROJECT_NAME,
+        "title": PROJECT_TITLE,
         "tagline": PROJECT_TAGLINE,
         "developer": DEVELOPER,
         "license": LICENSE_NAME,

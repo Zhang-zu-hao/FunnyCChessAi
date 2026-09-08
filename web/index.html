@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>FunnyCChessAi</title>
+  <title>FunnyAi对弈Of象棋 — ZZH</title>
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
@@ -12,7 +12,7 @@
       <div class="brand">
         <span class="seal">弈</span>
         <div>
-          <h1>FunnyCChessAi</h1>
+          <h1>FunnyAi对弈Of象棋 — ZZH</h1>
           <p class="sub">中国象棋多种衍生玩法 · 多引擎 AI · 在线对战</p>
         </div>
       </div>
@@ -40,10 +40,31 @@
             <select id="level"></select>
           </label>
         </div>
+        <div class="form-row" id="aiMatchRow">
+          <label>红方 AI
+            <select id="aiRed"></select>
+          </label>
+          <label>黑方 AI
+            <select id="aiBlack"></select>
+          </label>
+          <label>红方难度
+            <select id="levelRed"></select>
+          </label>
+          <label>黑方难度
+            <select id="levelBlack"></select>
+          </label>
+        </div>
+        <p class="tiny">AI 对战：双方都选本地引擎或已上传的自训练权重。也可点下方上传自己的 .pt。</p>
+        <div class="join-row">
+          <input id="aiFileName" readonly placeholder="未选择本地权重" />
+          <input id="aiFile" type="file" accept=".pt,.pth" hidden />
+          <button id="btnPickAi" type="button">选择本地 AI</button>
+        </div>
         <p id="engineHint" class="engine-hint">揭棋 · 选择难度后显示引擎与参数</p>
         <div class="cta">
           <button id="btnAi" class="primary">人机对战</button>
-          <button id="btnRoom" class="gold">创建在线房间</button>
+          <button id="btnAiMatch" class="gold">AI 对战</button>
+          <button id="btnRoom">创建在线房间</button>
         </div>
         <div class="join-row">
           <input id="joinCode" maxlength="8" placeholder="房间号，如 K7M2PQ" />
@@ -84,6 +105,7 @@
             <strong id="seatW">—</strong>
             <button data-seat="w" data-kind="human">人</button>
             <button data-seat="w" data-kind="ai">AI</button>
+            <select class="seat-engine" data-seat-engine="w" title="红方引擎"></select>
           </div>
           <div class="seat" data-color="b">
             <span class="dot black"></span>
@@ -91,6 +113,7 @@
             <strong id="seatB">—</strong>
             <button data-seat="b" data-kind="human">人</button>
             <button data-seat="b" data-kind="ai">AI</button>
+            <select class="seat-engine" data-seat-engine="b" title="黑方引擎"></select>
           </div>
         </div>
         <div class="pool" id="poolBox" hidden>

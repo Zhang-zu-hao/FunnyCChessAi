@@ -15,7 +15,8 @@ class TestCatalog(unittest.TestCase):
     def test_default_jieqi_first(self):
         modes = list_modes()
         self.assertEqual(modes[0]["id"], "jieqi")
-        self.assertEqual(public_meta()["name"], "FunnyCChessAi")
+        self.assertEqual(public_meta()["name"], "FunnyAi对弈Of象棋")
+        self.assertEqual(public_meta()["title"], "FunnyAi对弈Of象棋 — ZZH")
         self.assertEqual(public_meta()["developer"], "ZZH")
         self.assertEqual(public_meta()["github"], "https://github.com/Zhang-zu-hao/FunnyCChessAi")
         self.assertEqual(clamp_level("zzh"), 99)

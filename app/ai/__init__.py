@@ -8,7 +8,7 @@ from .heuristic import HeuristicEngine
 from .llm import LLMNarrator
 from .pikafish import PikafishEngine
 from .variant_search import VariantSearchEngine
-from .zzh import ZzhEngine
+from .zzh import ZzhEngine, list_local_checkpoints, resolve_pt
 
 _pikafish: PikafishEngine | None = None
 _heuristic = HeuristicEngine()
@@ -39,28 +39,41 @@ def zzh() -> ZzhEngine:
     return _zzh
 
 
-def list_engines() -> list[dict]:
+def list_engines(mode: str | None = None) -> list[dict]:
     pk = pikafish()
     http = http_engine()
     z = zzh()
-    return [
-        {"id": pk.id, "name": pk.name, "available": pk.available(), "modes": ["xiangqi", "jieqi"]},
-        {"id": _variant.id, "name": _variant.name, "available": True, "modes": sorted(_variant.modes)},
-        {"id": _heuristic.id, "name": _heuristic.name, "available": True, "modes": ["xiangqi", "jieqi"]},
-        {"id": http.id, "name": http.name, "available": http.available(), "modes": ["xiangqi", "jieqi"]},
-        {"id": z.id, "name": z.name, "available": z.available(), "modes": sorted(z.modes)},
-        {"id": "llm-narrator", "name": _narrator.name, "available": _narrator.available(), "modes": []},
+    items = [
+        {"id": pk.id, "name": pk.name, "available": pk.available(), "modes": ["xiangqi", "jieqi"], "kind": "builtin"},
+        {"id": _variant.id, "name": _variant.name, "available": True, "modes": sorted(_variant.modes), "kind": "builtin"},
+        {"id": _heuristic.id, "name": _heuristic.name, "available": True, "modes": ["xiangqi", "jieqi"], "kind": "builtin"},
+        {"id": http.id, "name": http.name, "available": http.available(), "modes": ["xiangqi", "jieqi"], "kind": "http"},
+        {"id": z.id, "name": z.name, "available": z.available(), "modes": sorted(z.modes), "kind": "selftrain"},
     ]
+    items.extend(list_local_checkpoints())
+    if mode:
+        m = mode.lower()
+        items = [e for e in items if not e.get("modes") or m in e["modes"]]
+    seen = set()
+    uniq = []
+    for e in items:
+        if e["id"] in seen:
+            continue
+        seen.add(e["id"])
+        uniq.append(e)
+    return uniq
 
 
 def resolve(engine_id: str | None, mode: str = "jieqi") -> AIEngine:
     eid = (engine_id or "auto").lower()
-    if eid in ("zzh",):
+    if eid.startswith("pt:") or eid in ("zzh", "selftrain"):
         return zzh()
     if eid in ("custom", "custom-http", "http") and http_engine().available():
         return http_engine()
     if eid in ("heuristic", "random"):
         return _heuristic
+    if eid in ("jieqi-search",) or (mode == "jieqi" and eid in ("variant-search", "variant")):
+        return pikafish()
     if eid in ("variant-search", "variant") or mode in _variant.modes:
         if mode in _variant.modes and eid in ("auto", "pikafish", ""):
             return _variant
@@ -71,17 +84,31 @@ def resolve(engine_id: str | None, mode: str = "jieqi") -> AIEngine:
         return pk
     if mode in _variant.modes:
         return _variant
+    if mode == "jieqi":
+        return pk
     return _heuristic
 
 
 def choose_move(req: MoveRequest, engine_id: str | None = None) -> MoveResponse:
     req.level = clamp_level(req.level)
-    if req.level == 99 or (engine_id or "").lower() == "zzh":
+    eid = (engine_id or "auto").lower()
+    extra = dict(req.extra or {})
+    pt = resolve_pt(eid)
+    if pt is not None:
+        extra["checkpoint"] = str(pt)
+        req.extra = extra
+        zresp = zzh().choose_move(req)
+        if zresp.move and zresp.move in set(req.legal_moves):
+            return zresp
+        eid = "auto"
+        engine_id = "auto"
+    if eid in ("zzh", "selftrain") or (eid in ("auto", "") and req.level == 99):
         zresp = zzh().choose_move(req)
         if zresp.move and zresp.move in set(req.legal_moves):
             return zresp
         req.level = 10
         engine_id = "auto"
+        eid = "auto"
     engine = resolve(engine_id, req.mode)
     try:
         resp = engine.choose_move(req)
