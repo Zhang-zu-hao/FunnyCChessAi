@@ -21,14 +21,3 @@ __all__ = [
     "WuhuGame",
     "create_game",
 ]
-
-__all__ = [
-    "FILES",
-    "RANKS",
-    "iccs_to_sq",
-    "sq_to_iccs",
-    "parse_iccs",
-    "XiangqiGame",
-    "JieqiGame",
-    "create_game",
-]

@@ -4,7 +4,7 @@ from typing import Any
 
 DEVELOPER = "ZZH"
 PROJECT_NAME = "FunnyCChessAi"
-PROJECT_TAGLINE = "一个集中国象棋多种衍生玩法于一体、且内置多种ai引擎及模型的在线对战平台。"
+PROJECT_TAGLINE = "一个集中国象棋多种衍生玩法于一体、且内置多种 AI 引擎及模型的在线对战平台。"
 GITHUB_URL = "https://github.com/Zhang-zu-hao/FunnyCChessAi"
 LICENSE_NAME = "GPL-3.0"
 LICENSE_NOTE = "本项目开源（GPL-3.0），与皮卡鱼、cchess 协议兼容。欢迎学习、对局与二次开发。"
