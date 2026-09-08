@@ -1,0 +1,40 @@
+#!/usr/bin/env python3
+"""单次启动：Web 服务 + 可分享链接。"""
+from __future__ import annotations
+
+import argparse
+import os
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+
+def main() -> None:
+    from app.catalog import DEVELOPER, LICENSE_NAME, PROJECT_NAME
+
+    parser = argparse.ArgumentParser(description=PROJECT_NAME)
+    parser.add_argument("--host", default=os.environ.get("XIANGQI_HOST", "0.0.0.0"))
+    parser.add_argument("--port", type=int, default=int(os.environ.get("XIANGQI_PORT", "8877")))
+    parser.add_argument("--no-tunnel", action="store_true")
+    args = parser.parse_args()
+    os.environ["XIANGQI_HOST"] = args.host
+    os.environ["XIANGQI_PORT"] = str(args.port)
+    if args.no_tunnel:
+        os.environ["XIANGQI_TUNNEL"] = "off"
+
+    from app.main import app
+    import uvicorn
+
+    print("=" * 56)
+    print(f"  {PROJECT_NAME}  ·  开发者 {DEVELOPER}  ·  {LICENSE_NAME}")
+    print("  揭棋 / 中国象棋 / 暗棋 / 侦查 / 满洲Dog / 霸王 / 五虎")
+    print(f"  监听 {args.host}:{args.port} （启动后见终端里的访问链接）")
+    print("=" * 56)
+    uvicorn.run(app, host=args.host, port=args.port, log_level="info")
+
+
+if __name__ == "__main__":
+    main()

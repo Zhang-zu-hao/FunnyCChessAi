@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>FunnyCChessAi</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <div class="brand">
+        <span class="seal">弈</span>
+        <div>
+          <h1>FunnyCChessAi</h1>
+          <p class="sub">中国象棋多种衍生玩法 · 多引擎 AI · 在线对战</p>
+        </div>
+      </div>
+      <div class="top-actions">
+        <span id="modeBadge" class="badge jieqi">揭棋</span>
+        <button id="btnLobby" class="ghost" hidden>返回大厅</button>
+      </div>
+    </header>
+
+    <section id="lobby" class="lobby">
+      <div class="lobby-card wide">
+        <p class="tagline">一个集<strong>中国象棋</strong>多种衍生玩法于一体、且内置多种 AI 引擎及模型的在线对战平台。</p>
+        <h2>选择玩法</h2>
+        <p class="tiny center">点选玩法会弹出规则说明（含图示）</p>
+        <div class="mode-grid" id="modeGrid"></div>
+        <div class="form-row">
+          <label>你的名字 <input id="nick" maxlength="16" placeholder="棋友" /></label>
+          <label>执棋
+            <select id="color">
+              <option value="w">红方先行</option>
+              <option value="b">黑方</option>
+            </select>
+          </label>
+          <label>AI 强度
+            <select id="level"></select>
+          </label>
+        </div>
+        <p id="engineHint" class="engine-hint">揭棋 · 选择难度后显示引擎与参数</p>
+        <div class="cta">
+          <button id="btnAi" class="primary">人机对战</button>
+          <button id="btnRoom" class="gold">创建在线房间</button>
+        </div>
+        <div class="join-row">
+          <input id="joinCode" maxlength="8" placeholder="房间号，如 K7M2PQ" />
+          <button id="btnJoin">加入房间</button>
+        </div>
+        <p id="lobbyHint" class="hint"></p>
+        <footer class="oss">
+          <span>开发者 <strong>ZZH</strong></span>
+          <span class="dot-sep">·</span>
+          <span>开源协议 <strong>GPL-3.0</strong></span>
+          <span class="dot-sep">·</span>
+          <span>欢迎学习、对局与二次开发</span>
+          <span class="dot-sep">·</span>
+          <a id="githubLink" href="https://github.com/Zhang-zu-hao/FunnyCChessAi" target="_blank" rel="noopener">GitHub</a>
+        </footer>
+      </div>
+    </section>
+
+    <section id="table" class="table" hidden>
+      <div class="board-wrap">
+        <div id="board" class="board" aria-label="棋盘"></div>
+      </div>
+      <aside class="panel">
+        <div class="status" id="status">等待开局</div>
+        <p class="engine-hint" id="tableEngine"></p>
+        <div class="share">
+          <label>分享对战链接</label>
+          <div class="share-row">
+            <input id="shareUrl" readonly />
+            <button id="btnCopy">复制</button>
+          </div>
+          <p class="tiny" id="roomMeta"></p>
+        </div>
+        <div class="seats">
+          <div class="seat" data-color="w">
+            <span class="dot red"></span>
+            <span>红方</span>
+            <strong id="seatW">—</strong>
+            <button data-seat="w" data-kind="human">人</button>
+            <button data-seat="w" data-kind="ai">AI</button>
+          </div>
+          <div class="seat" data-color="b">
+            <span class="dot black"></span>
+            <span>黑方</span>
+            <strong id="seatB">—</strong>
+            <button data-seat="b" data-kind="human">人</button>
+            <button data-seat="b" data-kind="ai">AI</button>
+          </div>
+        </div>
+        <div class="pool" id="poolBox" hidden>
+          <h3>未揭子力</h3>
+          <div id="pool"></div>
+        </div>
+        <p class="hint" id="phaseHint"></p>
+        <button id="btnReady" class="gold" hidden>完成布阵</button>
+        <ol class="moves" id="moves"></ol>
+        <p class="comment" id="comment"></p>
+        <div class="panel-actions">
+          <button id="btnResign" class="danger">认输</button>
+          <button id="btnNew">再来一局</button>
+        </div>
+      </aside>
+    </section>
+  </div>
+
+  <div id="ruleModal" class="modal" hidden>
+    <div class="modal-card">
+      <h3 id="ruleTitle">规则</h3>
+      <div id="ruleDiagram" class="diagram"></div>
+      <ul id="ruleList"></ul>
+      <button id="ruleOk" class="primary">知道了</button>
+    </div>
+  </div>
+  <div id="pickModal" class="modal" hidden>
+    <div class="modal-card">
+      <h3 id="pickTitle">请选择</h3>
+      <div id="pickBtns" class="pick-grid"></div>
+    </div>
+  </div>
+  <script src="/static/app.js"></script>
+</body>
+</html>
