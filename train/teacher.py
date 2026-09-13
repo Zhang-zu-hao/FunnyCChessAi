@@ -28,7 +28,7 @@ def teacher_move(game, legal: list[str], level: int = 2) -> str:
     mode = getattr(game, "mode", "")
     try:
         if mode == "jieqi":
-            mv, _ = search_jieqi(game, legal, level=level)
+            mv, _ = search_jieqi(game, legal, level=level, omniscient=False)
             if mv in legal:
                 return mv
         elif mode == "xiangqi":

@@ -32,8 +32,13 @@ LLM_MODEL = os.environ.get("XIANGQI_LLM_MODEL", "qwen2.5")
 ENGINE_THREADS = int(os.environ.get("XIANGQI_ENGINE_THREADS", "4"))
 ENGINE_HASH_MB = int(os.environ.get("XIANGQI_ENGINE_HASH", "64"))
 
+# auto：默认开临时公网隧道；named：CLOUDFLARE_TUNNEL_TOKEN；off 关掉
 TUNNEL = os.environ.get("XIANGQI_TUNNEL", "auto")
 CLOUDFLARED = os.environ.get("CLOUDFLARED_BIN", "cloudflared")
+TUNNEL_TOKEN = (
+    os.environ.get("CLOUDFLARE_TUNNEL_TOKEN") or os.environ.get("XIANGQI_TUNNEL_TOKEN") or ""
+).strip()
+PUBLIC_URL = os.environ.get("XIANGQI_PUBLIC_URL", "").strip().rstrip("/")
 
 LEVEL_DEPTH = XIANGQI_DEPTH
 LEVEL_MOVETIME_MS = XIANGQI_MOVETIME_MS

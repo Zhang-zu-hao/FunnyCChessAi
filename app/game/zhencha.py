@@ -112,7 +112,8 @@ class ZhenchaGame(GridXiangqi):
                             out.append(f"{move_iccs(f, r, tf, tr)}:{et.lower()}")
                     else:
                         out.append(move_iccs(f, r, tf, tr))
-        return out
+        from .repeat import filter_long_check_moves
+        return filter_long_check_moves(self, out)
 
     def _safe_move(self, ff: int, fr: int, tf: int, tr: int) -> bool:
         me = self.grid[fr][ff]

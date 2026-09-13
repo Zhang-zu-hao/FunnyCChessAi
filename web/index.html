@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>FunnyAi对弈Of象棋 — ZZH</title>
-  <link rel="stylesheet" href="/static/style.css" />
+  <link rel="stylesheet" href="/static/style.css?v=20260909h" />
 </head>
 <body>
   <div id="app">
@@ -12,7 +12,7 @@
       <div class="brand">
         <span class="seal">弈</span>
         <div>
-          <h1>FunnyAi对弈Of象棋 — ZZH</h1>
+          <h1>FunnyAi对弈Of象棋 <span class="brand-by">ZZH</span></h1>
           <p class="sub">中国象棋多种衍生玩法 · 多引擎 AI · 在线对战</p>
         </div>
       </div>
@@ -25,51 +25,87 @@
     <section id="lobby" class="lobby">
       <div class="lobby-card wide">
         <p class="tagline">一个集<strong>中国象棋</strong>多种衍生玩法于一体、且内置多种 AI 引擎及模型的在线对战平台。</p>
+        <div id="accessBox" class="access-box" hidden>
+          <p><strong>局域网</strong>（SMBU同网段） <span id="lanLinkText">—</span></p>
+          <p><strong>公网</strong>（局域网外只用这条） <a id="publicLink" href="#" target="_blank" rel="noopener">正在获取…</a></p>
+        </div>
         <h2>选择玩法</h2>
         <p class="tiny center">点选玩法会弹出规则说明（含图示）</p>
         <div class="mode-grid" id="modeGrid"></div>
-        <div class="form-row">
-          <label>你的名字 <input id="nick" maxlength="16" placeholder="棋友" /></label>
-          <label>执棋
-            <select id="color">
-              <option value="w">红方先行</option>
-              <option value="b">黑方</option>
-            </select>
-          </label>
-          <label>AI 强度
-            <select id="level"></select>
-          </label>
+
+        <h2>选择对战方式</h2>
+        <p class="tiny center">点人机或机机后，在下方选引擎并开始对局（不用开在线房间）</p>
+        <div class="vs-grid">
+          <button type="button" class="vs-card" id="pickHumanAi" data-vs="ai">
+            <strong>人机对战</strong>
+            <span>你执一方，对面是 AI</span>
+          </button>
+          <button type="button" class="vs-card" id="pickAiAi" data-vs="aivsai">
+            <strong>机机对战</strong>
+            <span>双方都是引擎，旁观对局</span>
+          </button>
         </div>
-        <div class="form-row" id="aiMatchRow">
-          <label>红方 AI
-            <select id="aiRed"></select>
-          </label>
-          <label>黑方 AI
-            <select id="aiBlack"></select>
-          </label>
-          <label>红方难度
-            <select id="levelRed"></select>
-          </label>
-          <label>黑方难度
-            <select id="levelBlack"></select>
-          </label>
+
+        <div id="setupWrap" class="setup-panel" hidden>
+          <p class="setup-title" id="setupTitle">对战选项</p>
+          <div class="form-row">
+            <label>你的名字 <input id="nick" maxlength="16" placeholder="棋友" /></label>
+          </div>
+          <div id="optsHuman" hidden>
+            <div class="form-row">
+              <label>执棋
+                <select id="color">
+                  <option value="w">红方先行</option>
+                  <option value="b">黑方</option>
+                </select>
+              </label>
+              <label>AI 引擎
+                <select id="aiHuman"></select>
+              </label>
+              <label>AI 强度
+                <select id="level"></select>
+              </label>
+            </div>
+          </div>
+          <div id="optsAiAi" hidden>
+            <div class="form-row" id="aiMatchRow">
+              <label>红方 AI
+                <select id="aiRed"></select>
+              </label>
+              <label>黑方 AI
+                <select id="aiBlack"></select>
+              </label>
+              <label>红方难度
+                <select id="levelRed"></select>
+              </label>
+              <label>黑方难度
+                <select id="levelBlack"></select>
+              </label>
+            </div>
+            <p class="tiny">双方可选内置引擎或已上传的自训练权重。</p>
+            <div class="join-row">
+              <input id="aiFileName" readonly placeholder="未选择本地权重" />
+              <input id="aiFile" type="file" accept=".pt,.pth" hidden />
+              <button id="btnPickAi" type="button" class="gold">选择本地 AI</button>
+            </div>
+          </div>
+          <p id="engineHint" class="engine-hint">选择难度后，对局侧栏会显示引擎与参数</p>
+          <div class="cta">
+            <button type="button" id="btnStart" class="primary wide">开始对局</button>
+          </div>
         </div>
-        <p class="tiny">AI 对战：双方都选本地引擎或已上传的自训练权重。也可点下方上传自己的 .pt。</p>
-        <div class="join-row">
-          <input id="aiFileName" readonly placeholder="未选择本地权重" />
-          <input id="aiFile" type="file" accept=".pt,.pth" hidden />
-          <button id="btnPickAi" type="button">选择本地 AI</button>
-        </div>
-        <p id="engineHint" class="engine-hint">揭棋 · 选择难度后显示引擎与参数</p>
-        <div class="cta">
-          <button id="btnAi" class="primary">人机对战</button>
-          <button id="btnAiMatch" class="gold">AI 对战</button>
-          <button id="btnRoom">创建在线房间</button>
-        </div>
-        <div class="join-row">
-          <input id="joinCode" maxlength="8" placeholder="房间号，如 K7M2PQ" />
-          <button id="btnJoin">加入房间</button>
-        </div>
+
+        <details class="online-box">
+          <summary>在线房间（可选，跟真人联网才需要）</summary>
+          <p class="tiny">人机 / 机机直接点上方「开始对局」即可，不必创建房间。</p>
+          <div class="cta">
+            <button type="button" id="btnRoom" class="gold">创建在线房间</button>
+          </div>
+          <div class="join-row">
+            <input id="joinCode" maxlength="8" placeholder="房间号，如 K7M2PQ" />
+            <button type="button" id="btnJoin" class="gold">加入房间</button>
+          </div>
+        </details>
         <p id="lobbyHint" class="hint"></p>
         <footer class="oss">
           <span>开发者 <strong>ZZH</strong></span>
@@ -94,8 +130,9 @@
           <label>分享对战链接</label>
           <div class="share-row">
             <input id="shareUrl" readonly />
-            <button id="btnCopy">复制</button>
+            <button type="button" id="btnCopy" class="gold">复制</button>
           </div>
+          <p class="tiny" id="shareLan" hidden></p>
           <p class="tiny" id="roomMeta"></p>
         </div>
         <div class="seats">
@@ -121,12 +158,12 @@
           <div id="pool"></div>
         </div>
         <p class="hint" id="phaseHint"></p>
-        <button id="btnReady" class="gold" hidden>完成布阵</button>
+        <button type="button" id="btnReady" class="gold" hidden>完成布阵</button>
         <ol class="moves" id="moves"></ol>
         <p class="comment" id="comment"></p>
         <div class="panel-actions">
-          <button id="btnResign" class="danger">认输</button>
-          <button id="btnNew">再来一局</button>
+          <button type="button" id="btnResign" class="danger">认输</button>
+          <button type="button" id="btnNew" class="gold">再来一局</button>
         </div>
       </aside>
     </section>
@@ -146,6 +183,6 @@
       <div id="pickBtns" class="pick-grid"></div>
     </div>
   </div>
-  <script src="/static/app.js"></script>
+  <script src="/static/app.js?v=20260909h"></script>
 </body>
 </html>

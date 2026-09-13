@@ -91,6 +91,12 @@ def resolve(engine_id: str | None, mode: str = "jieqi") -> AIEngine:
 
 def choose_move(req: MoveRequest, engine_id: str | None = None) -> MoveResponse:
     req.level = clamp_level(req.level)
+    game = (req.extra or {}).get("game")
+    if game is not None and req.legal_moves:
+        from app.game.repeat import filter_long_check_moves
+        filtered = filter_long_check_moves(game, list(req.legal_moves))
+        if filtered:
+            req.legal_moves = filtered
     eid = (engine_id or "auto").lower()
     extra = dict(req.extra or {})
     pt = resolve_pt(eid)

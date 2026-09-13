@@ -62,13 +62,36 @@ pip install -r requirements.txt
 python run.py --port 8877
 ```
 
-浏览器打开终端里打印的地址（本机一般为 `http://127.0.0.1:8877`）。
+浏览器打开终端里打印的地址：
+
+- **局域网 / 本机**：`http://127.0.0.1:8877` 或 `http://<内网IP>:8877`（同网段走内网，更快）
+- **公网**：默认开 Cloudflare **临时**隧道（`https://….trycloudflare.com`）。每次重启域名都会变，旧链接会 Error 1033。要固定、更稳的地址，用下面的 Named Tunnel。
+
+同一房间两条入口都能进。只想内网时加 `--no-tunnel`。
 
 | 参数 / 环境变量 | 默认 | 说明 |
 |---|---|---|
 | `--host` / `XIANGQI_HOST` | `0.0.0.0` | 监听地址 |
 | `--port` / `XIANGQI_PORT` | `8877` | 端口 |
-| `--no-tunnel` / `XIANGQI_TUNNEL=off` | `auto` | 关闭 cloudflared 公网隧道，仅本机与局域网 |
+| `--no-tunnel` / `XIANGQI_TUNNEL=off` | 默认开启公网 | 关掉本进程里的 cloudflared |
+| `--public-url` / `XIANGQI_PUBLIC_URL` | 空 | 大厅展示的固定公网地址，如 `https://chess.example.com` |
+| `--tunnel-token` / `CLOUDFLARE_TUNNEL_TOKEN` | 空 | Named Tunnel token；有 token 时不再用 trycloudflare |
+
+### 固定公网域名（推荐）
+
+临时 `trycloudflare.com` 不能预约域名。要固定入口需要一个已接入 Cloudflare 的域名，建 **Named Tunnel**：
+
+1. [Cloudflare Zero Trust](https://one.dash.cloudflare.com/) → Networks → Tunnels → Create → Cloudflared，复制 token。
+2. Public Hostname：`chess.你的域名` → `http://127.0.0.1:8877`（类型 HTTP）。
+3. 启动：
+
+```bash
+export CLOUDFLARE_TUNNEL_TOKEN='eyJ...'   # 仪表盘里的 token
+export XIANGQI_PUBLIC_URL='https://chess.你的域名'
+python run.py --port 8877
+```
+
+也可把 cloudflared 做成系统服务，本仓库用 `--no-tunnel --public-url https://chess.你的域名` 只负责 Web。校园若已有公网 IP / 反代，同样设 `XIANGQI_PUBLIC_URL`，不必再开临时隧道。
 
 本实验室若已有 conda 环境 `xiangqi-arena`，也可 `conda activate xiangqi-arena && python run.py --port 8877`。
 
@@ -83,7 +106,7 @@ python run.py --port 8877
 | 档位 | 揭棋 | 中国象棋 | 其他变体 |
 |---|---|---|---|
 | 1–3 | 浅层 minimax | 皮卡鱼浅层 | 浅层规则树 |
-| 4–6 | 皮卡鱼开局提示 + 揭棋搜索 | 皮卡鱼轻量 NNUE | 标准搜索 |
+| 4–6 | 皮卡鱼开局提示 + 揭棋搜索（不看暗子真身） | 皮卡鱼轻量 NNUE | 标准搜索 |
 | 7–9 | 皮卡鱼提示 + 揭棋全量搜索 | 皮卡鱼标准深度 | 深度搜索 |
 | 10 | 最长思考 | 皮卡鱼极限 | 最长思考 |
 | **自训练** | 加载 `engines/zzh/<mode>.pt`；失败则回退 10 级 | 同左 | 同左 |
@@ -105,6 +128,8 @@ python run.py --port 8877
 | `XIANGQI_ENGINE_THREADS` / `XIANGQI_ENGINE_HASH` | 皮卡鱼线程与 Hash（MB） |
 | `XIANGQI_ENGINE_DIR` | 引擎根目录，默认 `engines/` |
 | `CLOUDFLARED_BIN` | 公网隧道可执行文件 |
+| `CLOUDFLARE_TUNNEL_TOKEN` / `XIANGQI_TUNNEL_TOKEN` | Named Tunnel token，固定域名 |
+| `XIANGQI_PUBLIC_URL` | 大厅/分享用的固定公网 URL |
 
 ## 训练
 

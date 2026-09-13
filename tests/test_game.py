@@ -151,7 +151,7 @@ class TestJieqiSearch(unittest.TestCase):
         self.assertEqual(g.true_char(0, 3), "R")
         self.assertTrue(g.attacked_by(0, 3, "b"))
         legal = g.legal_moves()
-        mv, _ = search_jieqi(g, legal, level=8)
+        mv, _ = search_jieqi(g, legal, level=8, omniscient=True)
         self.assertIn(mv, legal)
         self.assertNotEqual(mv, "b0a2")
         g.apply(mv)
@@ -163,6 +163,55 @@ class TestJieqiSearch(unittest.TestCase):
                 f"move {mv} left hidden rook hanging",
             )
 
+    def test_eval_ignores_hidden_identity(self):
+        from app.ai.jieqi_search import eval_position
+        g = JieqiGame(seed=3)
+        reds = [
+            (f, r)
+            for r in range(10)
+            for f in range(9)
+            if g.grid[r][f] == "X" and (f, r) in g._truth
+        ]
+        a = b = None
+        for i, p0 in enumerate(reds):
+            for p1 in reds[i + 1 :]:
+                if g._truth[p0].upper() != g._truth[p1].upper():
+                    a, b = p0, p1
+                    break
+            if a:
+                break
+        self.assertIsNotNone(a)
+        pub0 = eval_position(g, False)
+        omni0 = eval_position(g, True)
+        g._truth[a], g._truth[b] = g._truth[b], g._truth[a]
+        self.assertEqual(pub0, eval_position(g, False))
+        self.assertNotEqual(omni0, eval_position(g, True))
+
+
+class TestLongCheck(unittest.TestCase):
+    def test_reverse_shuttle_is_suspect(self):
+        from app.game.repeat import long_check_suspect, own_check_streak
+        hist = [
+            {"move": "h0h7", "check": True},
+            {"move": "e9d9", "check": False},
+        ]
+        self.assertEqual(own_check_streak(hist), 1)
+        self.assertTrue(long_check_suspect(hist, "h7h0", captured=False))
+        self.assertFalse(long_check_suspect(hist, "a3a4", captured=False))
+
+    def test_streak_blocks_more_idle_checks(self):
+        from app.game.repeat import long_check_suspect, own_check_streak
+        hist = []
+        for _ in range(3):
+            hist.append({"move": "h0h7", "check": True})
+            hist.append({"move": "e9d9", "check": False})
+        self.assertEqual(own_check_streak(hist), 3)
+        self.assertTrue(long_check_suspect(hist, "b0c2", captured=False))
+        self.assertFalse(long_check_suspect(hist, "b0c2", captured=True))
+
+    def test_jieqi_legal_still_opening(self):
+        g = JieqiGame(seed=1)
+        self.assertEqual(len(g.legal_moves()), 44)
 
 
 if __name__ == "__main__":

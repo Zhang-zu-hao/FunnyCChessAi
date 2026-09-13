@@ -12,7 +12,7 @@ from .uci import UCIEngine
 
 
 class PikafishEngine:
-    """标准中国象棋：皮卡鱼 UCI。揭棋：规则树搜索（高强度会参考暗子真身），开局可向皮卡鱼要提示着。"""
+    """标准中国象棋：皮卡鱼 UCI。揭棋：规则树搜索（不对局透视暗子真身），开局可向皮卡鱼要提示着。"""
 
     id = "pikafish"
     name = "皮卡鱼"

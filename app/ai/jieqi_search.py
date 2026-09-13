@@ -147,7 +147,7 @@ def _order(game: JieqiGame, moves: list[str], hint: str | None, omniscient: bool
         s = 0.0
         if cap:
             s += 1_000 + _cap_val(game, tf, tr, omniscient)
-            mv_ch = game.true_char(ff, fr) if (omniscient or mover in "Xx") else mover
+            mv_ch = game.true_char(ff, fr) if omniscient else mover
             s -= VALUE.get(mv_ch, 100) * 0.04
         if mover in "Xx":
             true = game.true_char(ff, fr) if omniscient else ""
@@ -323,7 +323,10 @@ class _Search:
             _ff, _fr, tf, tr = parse_iccs(mv)
             see = _cap_val(game, tf, tr, self.omni)
             mover = game.grid[_fr][_ff]
-            mv_v = VALUE.get(game.true_char(_ff, _fr) if mover in "Xx" else mover, 200)
+            if mover in "Xx" and not self.omni:
+                mv_v = 280.0
+            else:
+                mv_v = VALUE.get(game.true_char(_ff, _fr) if mover in "Xx" else mover, 200)
             if see + 80 < mv_v * 0.35 and see < 400:
                 continue
             _ev, undo = game.make(mv, record=False, detect_stalemate=False)
@@ -340,8 +343,15 @@ class _Search:
         return best
 
 
-def search_jieqi(game: JieqiGame, legal: list[str], level: int, hint: str | None = None) -> tuple[str, float]:
-    resp = search_jieqi_ex(game, legal, level, hint=hint)
+def search_jieqi(
+    game: JieqiGame,
+    legal: list[str],
+    level: int,
+    hint: str | None = None,
+    *,
+    omniscient: bool | None = None,
+) -> tuple[str, float]:
+    resp = search_jieqi_ex(game, legal, level, hint=hint, omniscient=omniscient)
     return resp[0], resp[1]
 
 
@@ -350,13 +360,17 @@ def search_jieqi_ex(
     legal: list[str],
     level: int,
     hint: str | None = None,
+    *,
+    omniscient: bool | None = None,
 ) -> tuple[str, float, int, int]:
     if not legal:
         return "", 0.0, 0, 0
     level = clamp_level(level or 5)
     if level == 99:
         level = 10
-    omniscient = level >= 4
+    # 对局与训练默认都不看暗子真身，只用子力池期望；测试/分析可显式打开透视
+    if omniscient is None:
+        omniscient = False
     max_d = JIEQI_MAX_DEPTH[level]
     deadline = time.time() + JIEQI_TIME_SEC[level]
     ordered = _order(game, list(legal), hint, omniscient)

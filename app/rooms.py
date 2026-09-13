@@ -77,12 +77,16 @@ class RoomManager:
         self.rooms: dict[str, Room] = {}
         self.lock = asyncio.Lock()
         self.public_base: str = ""
+        self.lan_base: str = ""
 
     def set_public_base(self, url: str) -> None:
-        self.public_base = url.rstrip("/")
+        self.public_base = (url or "").rstrip("/")
 
-    def share_url(self, room_id: str) -> str:
-        base = self.public_base or ""
+    def set_lan_base(self, url: str) -> None:
+        self.lan_base = (url or "").rstrip("/")
+
+    def share_url(self, room_id: str, *, lan: bool = False) -> str:
+        base = (self.lan_base if lan else self.public_base) or self.public_base or self.lan_base or ""
         if not base:
             return f"/?room={room_id}"
         return f"{base}/?room={room_id}"
@@ -191,6 +195,7 @@ class RoomManager:
         state.update({
             "room": room.id,
             "share_url": self.share_url(room.id),
+            "lan_share_url": self.share_url(room.id, lan=True),
             "level": room.level,
             "engine_id": room.engine_id,
             "mode_name": info["name"],
@@ -299,7 +304,16 @@ class RoomManager:
             )
             if not resp.move:
                 return
-            await self.apply_move(room, resp.move, by=None, as_ai=True)
+            try:
+                await self.apply_move(room, resp.move, by=None, as_ai=True)
+            except ValueError:
+                legal = room.game.legal_moves()
+                if not legal:
+                    return
+                resp.move = legal[0]
+                resp.fallback = True
+                resp.comment = (resp.comment or "AI") + " · 已改走合法着"
+                await self.apply_move(room, resp.move, by=None, as_ai=True)
             moved = True
             comment = resp.comment
             n = narrator()
@@ -323,6 +337,8 @@ class RoomManager:
                 "comment": comment,
                 "move": resp.move,
             })
+        except Exception:
+            moved = False
         finally:
             room.ai_busy = False
             if moved and not room.game.over and room.seats[room.game.side].kind == "ai":

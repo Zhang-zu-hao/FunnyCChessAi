@@ -57,7 +57,8 @@ class XiangqiGame:
                     out.append(pos2iccs(mv[0], mv[1]))
             except Exception:
                 continue
-        return out
+        from .repeat import filter_long_check_moves
+        return filter_long_check_moves(self, out)
 
     def copy(self) -> XiangqiGame:
         g = XiangqiGame(self.fen())

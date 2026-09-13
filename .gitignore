@@ -13,6 +13,7 @@ engines/local/*.pth
 !engines/zzh/*.pt
 *.nnue
 *.log
+logs/
 train/logs/
 .pytest_cache/
 .mypy_cache/

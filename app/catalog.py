@@ -81,16 +81,16 @@ def _xq_profile(level: int) -> dict[str, Any]:
 def _jq_profile(level: int) -> dict[str, Any]:
     if level <= 3:
         engine, algo = "揭棋浅层搜索", "浅层 MINIMAX + 随机权重"
-        extra = "未知暗子按子力池期望"
+        extra = "未知暗子按子力池期望，不看真身"
     elif level <= 6:
         engine, algo = "皮卡鱼轻量 + 揭棋搜索", "开局皮卡鱼提示 · 揭棋规则树"
-        extra = "中高强度参考暗子真身"
+        extra = "暗子按占位子走法；真身未知，按子力池期望"
     elif level <= 9:
         engine, algo = "皮卡鱼 + 揭棋全量搜索", "开局提示 + 迭代加深 / 静态搜索"
-        extra = "全知暗子估值（训练/特级强度）"
+        extra = "不对局透视暗子真身"
     elif level == 10:
         engine, algo = "揭棋极限搜索", "最大深度与时间 · 皮卡鱼开局库提示"
-        extra = "最长思考"
+        extra = "不对局透视暗子真身"
     else:
         engine, algo = "自训练揭棋模型", "搜索教师自对弈权重（未接入时回退极限搜索）"
         extra = "本地 engines/zzh 权重 / HTTP"
@@ -135,7 +135,7 @@ MODES: dict[str, dict[str, Any]] = {
             "将/帅明放，其余 15 子在己方原位独立洗牌后扣放。",
             "暗子第一步按该格开局占位子的走法走，走完立即翻开预定真身。",
             "翻开后的仕/士可出九宫，相/象可过河；将帅仍限九宫。",
-            "飞将（将帅对面无子）为禁着；困毙判负；长时间无吃子判和。",
+            "飞将（将帅对面无子）为禁着；长将（来回将军不进子）为负；困毙判负；长时间无吃子判和。",
         ],
         "diagram": "start-dark",
         "ai": "jieqi",
@@ -149,7 +149,7 @@ MODES: dict[str, dict[str, Any]] = {
         "board": {"files": 9, "ranks": 10, "river": True, "palace": True},
         "rules_title": "中国象棋",
         "rules": [
-            "红先黑后，将帅不能对面，不能送将。",
+            "红先黑后，将帅不能对面，不能送将。长将为负。",
             "仕限九宫，相不能过河，兵过河后可横走。",
             "吃掉对方将/帅或使其无合法应将则胜。",
         ],

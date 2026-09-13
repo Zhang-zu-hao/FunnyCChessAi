@@ -19,6 +19,7 @@ CODE_INDEX = {
 def encode_game(game) -> torch.Tensor:
     t = torch.zeros(N_PIECE, MAX_RANKS, MAX_FILES)
     for p in game.pieces():
+        # 暗子只编码为 X，网络看不到预定真身
         ch = "X" if p.get("dark") else p["code"]
         idx = CODE_INDEX.get(ch, 0)
         r, f = p["rank"], p["file"]
@@ -45,12 +46,20 @@ def policy_move(ckpt: Path, req, device=None) -> str:
     net.load_state_dict({k: v.float() for k, v in state.items()})
     net.to(device).eval()
     game = (req.extra or {}).get("game")
+    legal = list(req.legal_moves)
+    if not legal:
+        return ""
+    if game is not None:
+        from app.game.repeat import filter_long_check_moves
+        filtered = filter_long_check_moves(game, legal)
+        if filtered:
+            legal = filtered
     x = encode_game(game).unsqueeze(0).to(device)
     with torch.no_grad():
         logits, _ = net(x)
         logits = logits[0].cpu()
-    best, best_s = req.legal_moves[0], -1e9
-    for mv in req.legal_moves:
+    best, best_s = legal[0], -1e9
+    for mv in legal:
         s = float(logits[move_index(mv)])
         if s > best_s:
             best, best_s = mv, s

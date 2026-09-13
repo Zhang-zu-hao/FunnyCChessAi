@@ -42,7 +42,7 @@
         { id: "jieqi", name: "揭棋", short: "默认玩法", rules: ["将帅明放，其余扣放，走子翻开。"], rules_title: "揭棋", diagram: "start-dark" },
         { id: "xiangqi", name: "中国象棋", short: "传统规则", rules: ["红先黑后。"], rules_title: "中国象棋", diagram: "start-full" },
       ],
-      levels: [...Array(10)].map((_, i) => ({ value: i + 1, label: String(i + 1) })).concat([{ value: 99, label: "ZZH" }]),
+      levels: [...Array(10)].map((_, i) => ({ value: i + 1, label: String(i + 1) })).concat([{ value: 99, label: "自训练" }]),
     }));
 
   function buildLobby(meta) {
@@ -58,11 +58,11 @@
       grid.appendChild(btn);
     });
     mode = meta.default_mode || "jieqi";
-    const title = meta.title || (meta.name ? `${meta.name} — ${meta.developer || "ZZH"}` : "");
-    if (title) {
-      document.title = title;
-      const h1 = document.querySelector(".brand h1");
-      if (h1) h1.textContent = title;
+    document.title = meta.title || `${meta.name || "FunnyAi对弈Of象棋"} — ${meta.developer || "ZZH"}`;
+    const h1 = document.querySelector(".brand h1");
+    if (h1 && meta.name) {
+      const by = meta.developer || "ZZH";
+      h1.innerHTML = `${meta.name} <span class="brand-by">${by}</span>`;
     }
     if (meta.github) {
       const gl = document.getElementById("githubLink");
@@ -77,10 +77,32 @@
     };
     updateEngineHint();
     loadAis(mode);
-    if (!roomId) {
-      const m = (meta.modes || []).find((x) => x.id === mode);
-      if (m) showRules(m, true);
-    }
+    loadAccess();
+  }
+
+  function loadAccess() {
+    fetch("/api/info")
+      .then((r) => r.json())
+      .then((info) => {
+        catalog = Object.assign(catalog || {}, info);
+        const box = $("accessBox");
+        const urls = info.urls || {};
+        const pub = (urls.public || [])[0] || "";
+        const lan = (urls.local || []).find((u) => u && !u.includes("127.0.0.1")) || (urls.local || [])[0] || location.origin;
+        if ($("lanLinkText")) $("lanLinkText").textContent = lan;
+        const a = $("publicLink");
+        if (a) {
+          if (pub) {
+            a.href = pub;
+            a.textContent = pub;
+          } else {
+            a.removeAttribute("href");
+            a.textContent = "公网隧道未就绪（请看启动终端）";
+          }
+        }
+        if (box) box.hidden = false;
+      })
+      .catch(() => {});
   }
 
   function fillLevelSelect(sel, levels, prefer) {
@@ -101,6 +123,7 @@
       .then((data) => {
         const ids = (data.engines || []).map((e) => e.id);
         const pick = (...cands) => cands.find((id) => ids.includes(id)) || "auto";
+        fillEngineSelect($("aiHuman"), data.engines, pick("selftrain", "pikafish", "variant-search", "heuristic"));
         fillEngineSelect($("aiRed"), data.engines, pick("selftrain", "variant-search", "heuristic"));
         fillEngineSelect($("aiBlack"), data.engines, pick("pikafish", "variant-search", "heuristic"));
         document.querySelectorAll(".seat-engine").forEach((sel) => {
@@ -135,11 +158,11 @@
     mode = m.id;
     updateEngineHint();
     loadAis(mode);
-    showRules(m, false);
+    showRules(m);
   }
 
   function updateEngineHint() {
-    if (!catalog) return;
+    if (!catalog || !engineHint) return;
     const lv = Number($("level").value || 5);
     const m = (catalog.modes || []).find((x) => x.id === mode);
     const name = m ? m.name : mode;
@@ -156,54 +179,174 @@
       });
   }
 
-  function showRules(m, silentFirst) {
+  function showRules(m) {
     $("ruleTitle").textContent = m.rules_title || m.name;
     $("ruleList").innerHTML = (m.rules || []).map((t) => `<li>${t}</li>`).join("");
     $("ruleDiagram").innerHTML = diagramHtml(m.diagram, m.id);
-    if (silentFirst && mode === "jieqi") {
-      /* 默认揭棋：仍弹出一次，方便上手 */
-    }
     $("ruleModal").hidden = false;
   }
 
   $("ruleOk").onclick = () => {
     $("ruleModal").hidden = true;
   };
+  $("ruleModal").addEventListener("click", (ev) => {
+    if (ev.target === $("ruleModal")) $("ruleModal").hidden = true;
+  });
 
-  function diagramHtml(kind, id) {
-    if (kind === "anqi") {
-      return `<div class="mini-board anqi">${cells(8, 4, true)}</div><p class="tiny">4×8 全扣放，翻子或走一格</p>`;
-    }
-    if (kind === "manchu") {
-      return `<div class="mini-board">${cells(9, 10, false, "manchu")}</div><p class="tiny">红方仅一枚满洲车（车马炮）</p>`;
-    }
-    if (kind === "bawang") {
-      return `<div class="mini-board">${cells(9, 10, false, "bawang")}</div><p class="tiny">红方帅+车，车可连走两步</p>`;
-    }
-    if (kind === "wuhu") {
-      return `<div class="mini-board">${cells(9, 10, false, "wuhu")}</div><p class="tiny">红方五兵仕相，兵可连动</p>`;
-    }
-    const dark = kind === "start-dark" || id === "jieqi" || id === "zhencha";
-    return `<div class="mini-board">${cells(9, 10, dark)}</div><p class="tiny">${dark ? "将帅明放，其余可扣" : "开局全明"}</p>`;
+  const PIECE_NAMES = {
+    K: "帅", A: "仕", B: "相", N: "马", R: "车", C: "炮", P: "兵", M: "满",
+    k: "将", a: "士", b: "象", n: "马", r: "车", c: "砲", p: "卒", m: "满",
+  };
+  const XQ_START = [
+    "RNBAKABNR",
+    ".........",
+    ".C.....C.",
+    "P.P.P.P.P",
+    ".........",
+    ".........",
+    "p.p.p.p.p",
+    ".c.....c.",
+    ".........",
+    "rnbakabnr",
+  ];
+
+  function mutateRank(row, fn) {
+    const a = row.split("");
+    fn(a);
+    return a.join("");
   }
 
-  function cells(files, ranks, dark, variant) {
-    let html = "";
-    for (let r = ranks - 1; r >= 0; r--) {
-      for (let f = 0; f < files; f++) {
-        let cls = "c";
-        if (variant === "manchu" && r === 0 && f === 0) cls += " super";
-        if (variant === "bawang" && r === 0 && (f === 0 || f === 4)) cls += " keep";
-        if (variant === "wuhu" && r === 3 && f % 2 === 0) cls += " pawn";
-        if (dark && !(files === 9 && ((r === 0 || r === 9) && f === 4))) cls += " dk";
-        html += `<i class="${cls}"></i>`;
+  function ranksToPieces(rows, opts) {
+    const darkExceptKing = !!(opts && opts.darkExceptKing);
+    const pieces = [];
+    rows.forEach((row, r) => {
+      [...row].forEach((ch, f) => {
+        if (!ch || ch === ".") return;
+        const king = ch === "K" || ch === "k";
+        const isRed = ch === ch.toUpperCase();
+        pieces.push({
+          f, r, ch,
+          color: isRed ? "w" : "b",
+          dark: !!(opts && opts.allDark) || (darkExceptKing && !king),
+          superP: ch === "M" || ch === "m",
+        });
+      });
+    });
+    return pieces;
+  }
+
+  function startPieces(id) {
+    if (id === "anqi") {
+      const pieces = [];
+      for (let r = 0; r < 4; r++) {
+        for (let f = 0; f < 8; f++) pieces.push({ f, r, ch: "X", color: "w", dark: true, superP: false });
       }
+      return pieces;
     }
+    let rows = XQ_START.slice();
+    if (id === "manchu") {
+      rows[0] = mutateRank(rows[0], (a) => { a[0] = "M"; a[1] = "."; a[7] = "."; a[8] = "."; });
+      rows[2] = ".........";
+    } else if (id === "bawang") {
+      rows[0] = "R...K....";
+      rows[2] = ".........";
+      rows[3] = ".........";
+    } else if (id === "wuhu") {
+      rows[0] = mutateRank(rows[0], (a) => { a[0] = "."; a[1] = "."; a[7] = "."; a[8] = "."; });
+      rows[2] = ".........";
+    }
+    const dark = id === "jieqi" || id === "zhencha";
+    return ranksToPieces(rows, { darkExceptKing: dark });
+  }
+
+  function rulePt(f, r, files, ranks) {
+    return [f + 0.5, ranks - 1 - r + 0.5];
+  }
+
+  function ruleSvg(files, ranks, river, palace) {
+    const line = (f1, r1, f2, r2, w) => {
+      const a = rulePt(f1, r1, files, ranks);
+      const b = rulePt(f2, r2, files, ranks);
+      return `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="#5c3317" stroke-width="${w || 0.04}"/>`;
+    };
+    let s = `<svg class="grid-svg" viewBox="0 0 ${files} ${ranks}" preserveAspectRatio="none">`;
+    const lastF = files - 1, lastR = ranks - 1;
+    for (let r = 0; r < ranks; r++) s += line(0, r, lastF, r);
+    if (river && ranks === 10) {
+      for (let f = 0; f < files; f++) {
+        s += line(f, 0, f, 4);
+        s += line(f, 5, f, 9);
+      }
+      s += line(0, 0, 0, 9, 0.05);
+      s += line(lastF, 0, lastF, 9, 0.05);
+      const mid = (rulePt(4, 4, files, ranks)[1] + rulePt(4, 5, files, ranks)[1]) / 2 + 0.12;
+      s += `<text x="${files / 2}" y="${mid}" text-anchor="middle" fill="#7a1f1f" font-size="0.42">楚河    漢界</text>`;
+    } else {
+      for (let f = 0; f < files; f++) s += line(f, 0, f, lastR);
+    }
+    if (palace && ranks === 10 && files === 9) {
+      s += line(3, 0, 5, 2);
+      s += line(5, 0, 3, 2);
+      s += line(3, 9, 5, 7);
+      s += line(5, 9, 3, 7);
+    }
+    return s + "</svg>";
+  }
+
+  function diagramHtml(kind, id) {
+    const anqi = id === "anqi" || kind === "anqi";
+    const files = anqi ? 8 : 9;
+    const ranks = anqi ? 4 : 10;
+    const pieces = startPieces(id);
+    const caps = {
+      jieqi: "将/帅明放，其余按开局位置扣放；暗子走一步即翻开真身",
+      xiangqi: "开局全明 · 红下黑上，子走交叉点（与对局棋盘一致）",
+      anqi: "4×8 半张盘，32 子全部扣放；翻开定色，或走已翻开的子",
+      zhencha: "将/帅明放，其余开局可布成明或暗；暗子可伪装走法",
+      manchu: "黑方全子；红方只留帅仕相兵，左车改为满洲车（可走车/马/炮）",
+      bawang: "黑方全子；红方仅帅与一车，红方每回合车可连走两步",
+      wuhu: "黑方全子；红方帅仕相与五兵，兵一回合可连动两步",
+    };
+    let html = `<div class="rule-board-wrap"><div class="rule-board${anqi ? " anqi" : ""}${id === "jieqi" || id === "zhencha" ? " jieqi" : ""}">`;
+    html += ruleSvg(files, ranks, !anqi, !anqi);
+    pieces.forEach((p) => {
+      const color = p.color === "w" ? "red" : "black";
+      const left = ((p.f + 0.5) / files) * 100;
+      const top = ((ranks - 1 - p.r + 0.5) / ranks) * 100;
+      const cls = `piece ${color}${p.dark ? " dark" : ""}${p.superP ? " super" : ""}`;
+      const name = p.dark ? "" : (PIECE_NAMES[p.ch] || p.ch);
+      html += `<div class="${cls}" style="left:${left}%;top:${top}%;">${name}</div>`;
+    });
+    html += `</div></div><p class="tiny">${caps[id] || ""}</p>`;
     return html;
   }
 
-  $("btnAi").onclick = () => startGame("ai");
-  $("btnAiMatch").onclick = () => startGame("aivsai");
+  let battleType = "";
+  function setBattleType(vs) {
+    battleType = vs;
+    document.querySelectorAll(".vs-card").forEach((b) => {
+      b.classList.toggle("active", b.dataset.vs === vs);
+    });
+    const wrap = $("setupWrap");
+    wrap.hidden = false;
+    $("optsHuman").hidden = vs !== "ai";
+    $("optsAiAi").hidden = vs !== "aivsai";
+    $("setupTitle").textContent = vs === "ai" ? "人机对战选项" : "机机对战选项";
+    $("btnStart").textContent = vs === "ai" ? "开始人机对局" : "开始机机对局";
+    $("btnStart").className = vs === "ai" ? "primary wide" : "gold wide";
+    loadAis(mode);
+    updateEngineHint();
+    wrap.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+  $("pickHumanAi").onclick = () => setBattleType("ai");
+  $("pickAiAi").onclick = () => setBattleType("aivsai");
+  $("btnStart").onclick = () => {
+    if (!battleType) {
+      lobbyHint.textContent = "请先点「人机对战」或「机机对战」";
+      return;
+    }
+    startGame(battleType);
+  };
   $("btnRoom").onclick = () => startGame("human");
   $("btnPickAi").onclick = () => $("aiFile").click();
   $("aiFile").onchange = () => {
@@ -229,18 +372,32 @@
       .catch(() => (lobbyHint.textContent = "上传失败"));
   };
   $("btnJoin").onclick = () => joinGame(($("joinCode").value || "").trim());
+  $("joinCode").addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter") {
+      ev.preventDefault();
+      joinGame(($("joinCode").value || "").trim());
+    }
+  });
+  let copyTimer = 0;
   $("btnCopy").onclick = async () => {
+    const text = (shareUrl.value || "").trim();
+    if (!text) {
+      commentEl.textContent = "暂无分享链接";
+      return;
+    }
     try {
-      await navigator.clipboard.writeText(shareUrl.value);
+      await navigator.clipboard.writeText(text);
       $("btnCopy").textContent = "已复制";
-      setTimeout(() => ($("btnCopy").textContent = "复制"), 1200);
+      clearTimeout(copyTimer);
+      copyTimer = setTimeout(() => { $("btnCopy").textContent = "复制"; }, 1200);
     } catch {
       shareUrl.select();
+      try { document.execCommand("copy"); } catch (_) {}
     }
   };
   $("btnLobby").onclick = () => (location.href = location.pathname);
   $("btnResign").onclick = () => send({ type: "resign" });
-  $("btnNew").onclick = () => send({ type: "new_game", mode });
+  $("btnNew").onclick = () => send({ type: "new_game", mode: (state && state.mode) || mode });
   $("btnReady").onclick = () => send({ type: "move", iccs: "ready" });
   document.querySelectorAll(".seat button").forEach((btn) => {
     btn.onclick = () => send({ type: "seat", color: btn.dataset.seat, kind: btn.dataset.kind });
@@ -271,11 +428,14 @@
         type: "create",
         mode,
         vs,
-        color: $("color").value,
-        level: Number($("level").value),
+        color: ($("color") && $("color").value) || "w",
+        level: Number(($("level") && $("level").value) || 5),
         name: nick(),
-        engine: Number($("level").value) === 99 ? "selftrain" : "auto",
+        engine: "auto",
       };
+      if (vs === "ai") {
+        payload.engine = ($("aiHuman") && $("aiHuman").value) || "auto";
+      }
       if (vs === "aivsai") {
         payload.w_engine = $("aiRed").value;
         payload.b_engine = $("aiBlack").value;
@@ -292,17 +452,29 @@
       lobbyHint.textContent = "请输入房间号";
       return;
     }
-    connect(() => send({ type: "join", room: code, name: nick(), color: $("color").value }));
+    connect(() => send({
+      type: "join",
+      room: code.toUpperCase(),
+      name: nick(),
+      color: ($("color") && $("color").value) || "w",
+    }));
   }
 
+  let wsWaiters = [];
   function connect(onOpen) {
+    if (onOpen) wsWaiters.push(onOpen);
     if (ws && ws.readyState === WebSocket.OPEN) {
-      onOpen && onOpen();
+      const fns = wsWaiters.splice(0);
+      fns.forEach((fn) => fn());
       return;
     }
+    if (ws && ws.readyState === WebSocket.CONNECTING) return;
     const proto = location.protocol === "https:" ? "wss" : "ws";
     ws = new WebSocket(`${proto}://${location.host}/ws`);
-    ws.onopen = () => onOpen && onOpen();
+    ws.onopen = () => {
+      const fns = wsWaiters.splice(0);
+      fns.forEach((fn) => fn());
+    };
     ws.onclose = () => {
       if (table.hidden === false) statusEl.textContent = "连接已断开，请刷新";
     };
@@ -319,16 +491,21 @@
         role = msg.role;
         roomId = msg.room;
         showTable();
-        const u = new URL(location.href);
-        u.searchParams.set("room", msg.room);
-        history.replaceState(null, "", u);
-        shareUrl.value = absUrl(msg.share_url);
+        try {
+          const next = new URL(location.href);
+          next.searchParams.set("room", msg.room);
+          history.replaceState(null, "", next.pathname + next.search);
+        } catch (_) {}
+        fillShare(msg.room, msg.share_url, msg.lan_share_url);
+        if (msg.state) {
+          applyState(msg.state);
+        } else {
+          statusEl.textContent = "正在载入局面…";
+        }
         return;
       }
-      if (msg.type === "state") {
-        state = msg;
-        showTable();
-        render();
+      if (msg.type === "state" || (msg.pieces && msg.seats)) {
+        applyState(msg);
         return;
       }
       if (msg.type === "ai_comment") {
@@ -339,6 +516,18 @@
     };
   }
 
+  function applyState(msg) {
+    state = msg;
+    showTable();
+    try {
+      render();
+    } catch (err) {
+      statusEl.textContent = statusText() || "对局进行中";
+      commentEl.textContent = "局面刷新出错，请再来一局或刷新";
+      console.error(err);
+    }
+  }
+
   function send(obj) {
     if (!ws || ws.readyState !== WebSocket.OPEN) {
       lobbyHint.textContent = "尚未连接";
@@ -347,16 +536,49 @@
     ws.send(JSON.stringify(obj));
   }
 
+  function withRoom(base, room) {
+    if (!base || !room) return "";
+    try {
+      const u = new URL(base, location.origin);
+      u.searchParams.set("room", room);
+      return u.toString();
+    } catch {
+      return `${String(base).replace(/\/$/, "")}/?room=${room}`;
+    }
+  }
+
   function absUrl(path) {
     if (!path) return location.href;
-    if (path.startsWith("http")) return path;
-    return location.origin + path;
+    try {
+      return new URL(path, location.origin).toString();
+    } catch {
+      return String(path);
+    }
+  }
+
+  function fillShare(room, share, lanShare) {
+    const urls = (catalog && catalog.urls) || {};
+    const pubBase = (urls.public && urls.public[0]) || "";
+    const lanBase = (urls.local || []).find((u) => u && !u.includes("127.0.0.1")) || (urls.local || [])[0] || "";
+    const publicLink = pubBase ? withRoom(pubBase, room) : (share ? absUrl(share) : "");
+    const lanLink = lanShare ? absUrl(lanShare) : (lanBase ? withRoom(lanBase, room) : "");
+    shareUrl.value = publicLink || lanLink;
+    const hint = $("shareLan");
+    if (!hint) return;
+    if (publicLink && lanLink && publicLink !== lanLink) {
+      hint.hidden = false;
+      hint.textContent = "SMBU同网段更快：" + lanLink;
+    } else {
+      hint.hidden = true;
+      hint.textContent = "";
+    }
   }
 
   function showTable() {
     lobby.hidden = true;
     table.hidden = false;
     $("btnLobby").hidden = false;
+    if (!state) statusEl.textContent = "正在载入局面…";
   }
 
   function boardSpec() {
@@ -380,6 +602,7 @@
   function render() {
     if (!state) return;
     mode = state.mode;
+    statusEl.textContent = statusText();
     const spec = boardSpec();
     modeBadge.textContent = state.mode_name || mode;
     modeBadge.className = "badge " + (mode === "jieqi" ? "jieqi" : "xiangqi");
@@ -394,7 +617,7 @@
     $("seatB").textContent = labelSeat(state.seats.b);
     syncSeatEngine("w");
     syncSeatEngine("b");
-    shareUrl.value = absUrl(state.share_url);
+    fillShare(state.room, state.share_url, state.lan_share_url);
     roomMeta.textContent = `房间 ${state.room} · 在线 ${state.viewers} · 你是${roleText(role)}`;
     statusEl.textContent = statusText();
     if (state.ai_profile) {
@@ -448,7 +671,7 @@
   }
 
   function statusText() {
-    if (!state) return "";
+    if (!state) return "正在载入局面…";
     if (state.over) {
       if (state.winner === "draw") return "和棋";
       return (state.winner === "w" ? "红方" : "黑方") + "胜";
@@ -458,7 +681,8 @@
     const turn = state.side === "w" ? "红方" : "黑方";
     const chk = state.check ? "（将军）" : "";
     const extra = state.actions_left > 1 ? `（本回合余 ${state.actions_left} 步）` : "";
-    const who = state.seats[state.side].kind === "ai" ? "AI 思考中" : "行棋";
+    const seat = state.seats && state.seats[state.side];
+    const who = seat && seat.kind === "ai" ? "AI 思考中" : "行棋";
     return `${turn}${who}${chk}${extra}`;
   }
 

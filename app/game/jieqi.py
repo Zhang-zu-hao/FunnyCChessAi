@@ -52,7 +52,7 @@ class JieqiGame:
     - 将/帅明放，其余 15 子在己方原位独立洗牌后扣放；
     - 暗子首步按**该格开局占位子**的走法行走，走完立即翻开为预定真身；
     - 翻开后的仕/士可出九宫，相/象可过河；将帅仍限九宫；飞将禁着；
-    - 困毙判负；40 回合无吃子判和。
+    - 长将（来回将军不进子）为负；困毙判负；40 回合无吃子判和。
     """
 
     mode = "jieqi"
@@ -89,7 +89,7 @@ class JieqiGame:
         g._truth = dict(self._truth)
         g.pools = {RED: Counter(self.pools[RED]), BLACK: Counter(self.pools[BLACK])}
         g.side = self.side
-        g.history = [] if search else list(self.history)
+        g.history = list(self.history[-16:]) if search else list(self.history)
         g.no_capture = self.no_capture
         g.over = self.over
         g.winner = self.winner
@@ -105,16 +105,24 @@ class JieqiGame:
         return ch
 
     def has_legal_move(self) -> bool:
+        from .repeat import filter_long_check_moves
+
+        return bool(filter_long_check_moves(self, self._raw_legal_moves()))
+
+    def _raw_legal_moves(self) -> list[str]:
         mine = self.side
         opp = BLACK if mine == RED else RED
         kp = self._kings.get(mine)
         in_chk = bool(kp) and self.attacked_by(kp[0], kp[1], opp)
+        out: list[str] = []
         for r in range(ROWS):
             for f in range(COLS):
                 ch = self.grid[r][f]
-                if ch and color_of(ch) == mine and self.legal_targets(f, r, kp=kp, in_chk=in_chk):
-                    return True
-        return False
+                if not ch or color_of(ch) != mine:
+                    continue
+                for tf, tr in self.legal_targets(f, r, kp=kp, in_chk=in_chk):
+                    out.append(move_iccs(f, r, tf, tr))
+        return out
 
     @property
     def ply(self) -> int:
@@ -393,18 +401,8 @@ class JieqiGame:
     def legal_moves(self) -> list[str]:
         if self.over:
             return []
-        mine = self.side
-        opp = BLACK if mine == RED else RED
-        kp = self._kings.get(mine)
-        in_chk = bool(kp) and self.attacked_by(kp[0], kp[1], opp)
-        out = []
-        for r in range(ROWS):
-            for f in range(COLS):
-                ch = self.grid[r][f]
-                if ch and color_of(ch) == mine:
-                    for tf, tr in self.legal_targets(f, r, kp=kp, in_chk=in_chk):
-                        out.append(move_iccs(f, r, tf, tr))
-        return out
+        from .repeat import filter_long_check_moves
+        return filter_long_check_moves(self, self._raw_legal_moves())
 
     def in_check(self, color: str | None = None) -> bool:
         color = color or self.side

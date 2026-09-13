@@ -14,7 +14,7 @@ from app import __version__
 from app.ai import list_engines, pikafish, shutdown
 from app.ai.zzh import save_uploaded_pt
 from app.catalog import DEVELOPER, PROJECT_NAME, PROJECT_TITLE, clamp_level, public_meta
-from app.config import PORT, TUNNEL, WEB_DIR
+from app.config import PORT, PUBLIC_URL, TUNNEL, WEB_DIR
 from app.rooms import Client, clean_name, manager
 from app.tunnel import Tunnel, lan_urls
 
@@ -31,14 +31,18 @@ async def lifespan(app: FastAPI):
     if TUNNEL not in ("off", "0", "false"):
         _tunnel = Tunnel(port)
         public = await asyncio.get_running_loop().run_in_executor(None, _tunnel.start)
+    if not public and PUBLIC_URL:
+        public = PUBLIC_URL
     bind_public_urls(local, public)
     print("访问链接:", flush=True)
+    print("  【局域网】SMBU同网段请用：", flush=True)
     for u in local:
-        print(f"  {u}", flush=True)
+        print(f"    {u}", flush=True)
     if public:
-        print(f"  公网分享: {public}", flush=True)
+        print("  【公网】局域网外请用（分享对局默认这条）：", flush=True)
+        print(f"    {public}", flush=True)
     else:
-        print("  未获得公网隧道，可用局域网地址分享给同网段对手", flush=True)
+        print("  【公网】未建立，局域网外暂时连不上", flush=True)
     await asyncio.get_running_loop().run_in_executor(
         None, lambda: pikafish().available() and pikafish()._engine()
     )
@@ -151,27 +155,33 @@ async def websocket_game(ws: WebSocket):
                         b_level=msg.get("b_level"),
                     )
                     room_id = room.id
+                    snap = manager.snapshot(room)
                     await ws.send_json({
                         "type": "joined",
                         "room": room.id,
                         "role": client.role,
                         "share_url": manager.share_url(room.id),
+                        "lan_share_url": manager.share_url(room.id, lan=True),
+                        "state": snap,
                     })
-                    await manager.broadcast(room, {"type": "state", **manager.snapshot(room)})
-                    await manager.maybe_ai(room)
+                    await manager.broadcast(room, {**snap, "type": "state"})
+                    asyncio.create_task(manager.maybe_ai(room))
                 elif mtype == "join":
                     if room_id:
                         await manager.drop_client(room_id, client.client_id)
                     client.name = clean_name(msg.get("name"))
                     room = await manager.join(msg.get("room") or "", client, prefer=msg.get("color"))
                     room_id = room.id
+                    snap = manager.snapshot(room)
                     await ws.send_json({
                         "type": "joined",
                         "room": room.id,
                         "role": client.role,
                         "share_url": manager.share_url(room.id),
+                        "lan_share_url": manager.share_url(room.id, lan=True),
+                        "state": snap,
                     })
-                    await manager.broadcast(room, {"type": "state", **manager.snapshot(room)})
+                    await manager.broadcast(room, {**snap, "type": "state"})
                 elif mtype == "move":
                     if not room_id:
                         raise ValueError("尚未进入房间")
@@ -186,6 +196,8 @@ async def websocket_game(ws: WebSocket):
                     if not room_id:
                         raise ValueError("尚未进入房间")
                     room = manager.get(room_id)
+                    if not room:
+                        raise ValueError("房间已关闭")
                     await manager.set_seat(
                         room,
                         msg.get("color"),
@@ -198,15 +210,22 @@ async def websocket_game(ws: WebSocket):
                     if not room_id:
                         raise ValueError("尚未进入房间")
                     room = manager.get(room_id)
+                    if not room:
+                        raise ValueError("房间已关闭")
                     await manager.new_game(room, msg.get("mode"))
                 elif mtype == "resign":
                     if not room_id:
                         raise ValueError("尚未进入房间")
-                    await manager.resign(manager.get(room_id), client)
+                    room = manager.get(room_id)
+                    if not room:
+                        raise ValueError("房间已关闭")
+                    await manager.resign(room, client)
                 elif mtype == "level":
                     if not room_id:
                         raise ValueError("尚未进入房间")
                     room = manager.get(room_id)
+                    if not room:
+                        raise ValueError("房间已关闭")
                     async with room.lock:
                         room.level = clamp_level(msg.get("level") or 5)
                     await manager.broadcast(room, {"type": "state", **manager.snapshot(room)})
@@ -229,9 +248,8 @@ async def websocket_game(ws: WebSocket):
 def bind_public_urls(local: list[str], public: str | None) -> None:
     PUBLIC_URLS["local"] = local
     PUBLIC_URLS["public"] = [public] if public else []
-    if public:
-        manager.set_public_base(public)
-    elif local:
-        # 优先局域网地址便于分享
-        lan = next((u for u in local if "127.0.0.1" not in u), local[0])
-        manager.set_public_base(lan)
+    lan = next((u for u in local if "127.0.0.1" not in u), local[0] if local else "")
+    if lan:
+        manager.set_lan_base(lan)
+    # 分享链接优先公网，局域网外才能点开；本机/同网段仍可直接用内网地址
+    manager.set_public_base(public or lan)

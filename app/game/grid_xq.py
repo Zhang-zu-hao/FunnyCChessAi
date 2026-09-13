@@ -52,7 +52,7 @@ class GridXiangqi:
         g = self.__class__.__new__(self.__class__)
         g.grid = [row[:] for row in self.grid]
         g.side = self.side
-        g.history = [] if search else list(self.history)
+        g.history = list(self.history[-16:]) if search else list(self.history)
         g.no_capture = self.no_capture
         g.over = self.over
         g.winner = self.winner
@@ -135,7 +135,8 @@ class GridXiangqi:
                 if ch and color_of(ch) == self.side:
                     for tf, tr in self.legal_targets(f, r):
                         out.append(move_iccs(f, r, tf, tr))
-        return out
+        from .repeat import filter_long_check_moves
+        return filter_long_check_moves(self, out)
 
     def _end_turn(self) -> None:
         self.side = BLACK if self.side == RED else RED
